@@ -26,7 +26,7 @@ function DesktopSidebar() {
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
-      <div className="border-b border-border p-5">
+      <div className="flex min-h-[89px] flex-col justify-center border-b border-border p-5">
         <p className="font-display text-xl font-semibold">Cuaderno</p>
         <p className="text-xs text-muted-foreground">Gestión de Logística</p>
       </div>
@@ -84,10 +84,6 @@ function MobileBottomNav() {
         <BottomNavLink key={item.to} item={item} />
       ))}
 
-      {/* Siempre se muestra: además de agrupar los ítems secundarios, es el
-          único lugar donde vive "Cerrar sesión" en mobile. Si `secondary`
-          viene vacío (caso super_admin, o vendedor sin permisos secundarios),
-          el panel solo tiene el logout. */}
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
         <SheetTrigger asChild>
           <button className="flex flex-1 flex-col items-center justify-center gap-1 text-xs font-medium text-muted-foreground">
