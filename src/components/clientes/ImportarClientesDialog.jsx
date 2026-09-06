@@ -1,12 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Upload } from 'lucide-react'
+import { Loader2, Sparkles, Upload, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { importarClientesExcel } from '@/api/clientes'
 import { getApiErrorMessage } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -16,16 +15,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-const CLAVES_NOMBRE = ['nombre', 'Nombre', 'NOMBRE', 'Nombre y Apellido', 'cliente', 'Cliente']
-
 function nombreDeFila(fila) {
-  for (const clave of CLAVES_NOMBRE) {
-    if (fila?.[clave]) return fila[clave]
-  }
-  return null
+  return fila?.nombre ?? null
 }
 
 function textoParaCopiar(omitidos) {
@@ -76,10 +71,15 @@ export function ImportarClientesDialog({ trigger }) {
     }
   }
 
+  // Total de clientes generados por división automática, para el resumen
+  // ("3 filas generaron 6 clientes"). filasDivididas puede venir vacío.
+  const totalDivididos =
+    resultado?.filasDivididas?.reduce((acc, f) => acc + f.clientesGenerados.length, 0) ?? 0
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar clientes desde Excel</DialogTitle>
           {!resultado && (
@@ -130,11 +130,31 @@ export function ImportarClientesDialog({ trigger }) {
               {resultado.omitidos.length > 0 && (
                 <Badge variant="warning">{resultado.omitidos.length} omitidos</Badge>
               )}
+              {/* Indicador de método: determinístico = rápido y exacto,
+                  ia = respaldo cuando el formato es atípico. */}
+              <Badge variant="outline" className="ml-auto gap-1">
+                {resultado.metodoExtraccion === 'deterministico' ? (
+                  <>
+                    <Zap className="size-3" />
+                    Lectura exacta
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-3" />
+                    Con IA
+                  </>
+                )}
+              </Badge>
             </div>
 
             <Tabs defaultValue="creados">
               <TabsList>
                 <TabsTrigger value="creados">Creados ({resultado.creados.length})</TabsTrigger>
+                {totalDivididos > 0 && (
+                  <TabsTrigger value="divididos">
+                    Divididos ({resultado.filasDivididas.length})
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="omitidos">Omitidos ({resultado.omitidos.length})</TabsTrigger>
               </TabsList>
 
@@ -151,6 +171,25 @@ export function ImportarClientesDialog({ trigger }) {
                   </ul>
                 )}
               </TabsContent>
+
+              {totalDivididos > 0 && (
+                <TabsContent value="divididos">
+                  <p className="pb-2 text-xs text-muted-foreground">
+                    Se detectaron {resultado.filasDivididas.length} fila(s) con más de un cliente,
+                    generando {totalDivididos} cliente(s) nuevo(s). Revisá que la división sea correcta.
+                  </p>
+                  <ul className="flex max-h-64 flex-col gap-2 overflow-y-auto py-2">
+                    {resultado.filasDivididas.map((division, index) => (
+                      <li key={index} className="rounded-md bg-muted px-3 py-2 text-sm">
+                        <p className="text-xs text-muted-foreground">{division.filaOriginal}</p>
+                        <p className="font-medium">
+                          → {division.clientesGenerados.join(' + ')}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </TabsContent>
+              )}
 
               <TabsContent value="omitidos">
                 {resultado.omitidos.length === 0 ? (

@@ -1,56 +1,81 @@
-import axios from 'axios'
+import { apiClient } from './client'
+
+// --- CRUD básico de clientes ---
+
+export async function fetchClientes({
+  busqueda,
+  activo,
+  ordenarPor,
+  orden,
+  soloDeudores,
+  saldoMinimo,
+  barrio,
+} = {}) {
+  const { data } = await apiClient.get('/clientes', {
+    params: { busqueda, activo, ordenarPor, orden, soloDeudores, saldoMinimo, barrio },
+  })
+  return data.clientes ?? data
+}
+
+export async function fetchCliente(id) {
+  const { data } = await apiClient.get(`/clientes/${id}`)
+  return data.cliente ?? data
+}
+
+export async function crearCliente(payload) {
+  const { data } = await apiClient.post('/clientes', payload)
+  return data.cliente ?? data
+}
+
+export async function actualizarCliente({ id, ...payload }) {
+  const { data } = await apiClient.put(`/clientes/${id}`, payload)
+  return data.cliente ?? data
+}
+
+export async function eliminarCliente(id) {
+  await apiClient.delete(`/clientes/${id}`)
+}
+
+// --- Importación masiva ---
 
 /**
- * Cliente HTTP central de la app.
+ * Importación masiva de clientes desde Excel (.xlsx / .xls).
  *
- * - `baseURL`: en producción usamos la ruta relativa `/api`, que Vercel
- *   reescribe hacia el backend real de Render (ver vercel.json en la raíz
- *   del proyecto). Esto hace que, desde la perspectiva del navegador, el
- *   frontend y el backend sean el mismo origen — evita el bloqueo de
- *   cookies cross-domain que aplica Safari/iOS de forma más agresiva que
- *   otros navegadores, incluso con `SameSite=None; Secure` bien configurado.
- *   En desarrollo local seguimos usando la URL completa de VITE_API_URL
- *   (http://localhost:4000/api), porque ahí no hay proxy de Vercel.
- * - `withCredentials: true` es obligatorio en TODAS las requests: la sesión
- *   viaja como cookie httpOnly, no como token. Sin esto el backend nunca ve
- *   la cookie y todo responde 401.
- * - El interceptor de 401 dispara un evento global en vez de redirigir acá
- *   mismo, para no acoplar esta capa a react-router. Quien escucha ese
- *   evento (AuthProvider) decide qué hacer con la sesión y la navegación.
+ * v2: el backend ya no siempre usa IA — si detecta un encabezado
+ * reconocible, procesa determinísticamente (rápido, exacto, sin variación
+ * entre corridas). Solo cae a IA si el formato es atípico. También divide
+ * automáticamente filas con más de un cliente pegado en la misma celda
+ * (ej. "PIVIERO / Moroncini Pablo"), y omite explícitamente filas sin
+ * dirección o ambiguas, en vez de adivinar o perderlas silenciosamente.
+ *
+ * Devuelve { totalFilasLeidas, metodoExtraccion, creados, omitidos, filasDivididas }.
+ *
+ * Timeout extendido a 2 minutos: sigue vigente para el caso en que el
+ * backend recurra a IA como respaldo.
  */
-export const apiClient = axios.create({
-  baseURL: import.meta.env.PROD ? '/api' : import.meta.env.VITE_API_URL,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
+export async function importarClientesExcel(archivo) {
+  const formData = new FormData()
+  formData.append('archivo', archivo)
 
-export const SESSION_EXPIRED_EVENT = 'auth:session-expired'
+  const { data } = await apiClient.post('/clientes/importar-excel', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
+  })
+  return data
+}
 
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const status = error.response?.status
-    const url = error.config?.url ?? ''
+// --- Envases retornables ---
 
-    // No disparamos el evento si el 401 viene del propio /auth/me o /auth/login:
-    // ahí un 401 es una respuesta esperada (todavía no hay sesión / credenciales
-    // inválidas), no una sesión que "se venció" en medio del uso de la app.
-    const esRutaDeAuth = url.includes('/auth/me') || url.includes('/auth/login')
+export async function fetchEnvasesCliente(clienteId) {
+  const { data } = await apiClient.get(`/clientes/${clienteId}/envases`)
+  return data.envases ?? data
+}
 
-    if (status === 401 && !esRutaDeAuth) {
-      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT))
-    }
-
-    return Promise.reject(error)
-  }
-)
-
-/**
- * Extrae un mensaje de error legible de una respuesta de la API.
- * El backend siempre responde `{ error: "mensaje" }` en los casos de error.
- */
-export function getApiErrorMessage(error, fallback = 'Ocurrió un error inesperado') {
-  return error?.response?.data?.error ?? fallback
+export async function ajustarEnvaseCliente({ clienteId, productoId, delta, motivo }) {
+  const { data } = await apiClient.post(`/clientes/${clienteId}/envases/ajuste`, {
+    producto_id: productoId,
+    delta,
+    motivo,
+  })
+  return data
 }
