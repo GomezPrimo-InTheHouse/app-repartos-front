@@ -5,6 +5,7 @@ import { getApiErrorMessage } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CrearEmpleadoSheet } from '@/components/empleados/CrearEmpleadoSheet'
+import { EditarPermisosDialog } from '@/components/empleados/EditarPermisosDialog'
 import { ResetearPasswordEmpleadoDialog } from '@/components/empleados/ResetearPasswordEmpleadoDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
@@ -55,17 +56,18 @@ export function EmpleadosPage() {
               <TableHead>Nombre</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Rol</TableHead>
+              <TableHead>Módulos</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading && <TableEmpty colSpan={5}>Cargando…</TableEmpty>}
+            {isLoading && <TableEmpty colSpan={6}>Cargando…</TableEmpty>}
 
-            {isError && <TableEmpty colSpan={5}>No se pudo cargar el equipo.</TableEmpty>}
+            {isError && <TableEmpty colSpan={6}>No se pudo cargar el equipo.</TableEmpty>}
 
             {empleados?.length === 0 && (
-              <TableEmpty colSpan={5}>Todavía no agregaste empleados.</TableEmpty>
+              <TableEmpty colSpan={6}>Todavía no agregaste empleados.</TableEmpty>
             )}
 
             {empleados?.map((empleado) => {
@@ -85,12 +87,29 @@ export function EmpleadosPage() {
                     <Badge>{ROL_LABEL[empleado.rol] ?? empleado.rol}</Badge>
                   </TableCell>
                   <TableCell>
+                    {empleado.rol === 'admin' ? (
+                      <span className="text-xs text-muted-foreground">Todos (admin)</span>
+                    ) : empleado.permisos?.length > 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        {empleado.permisos.length} módulo(s)
+                      </span>
+                    ) : (
+                      <span className="text-xs text-destructive">Sin módulos</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={empleado.activo ? 'success' : 'destructive'}>
                       {empleado.activo ? 'Activo' : 'Inactivo'}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
+                      {empleado.rol === 'vendedor' && (
+                        <EditarPermisosDialog
+                          empleado={empleado}
+                          trigger={<Button variant="outline" size="sm">Módulos</Button>}
+                        />
+                      )}
                       <ResetearPasswordEmpleadoDialog
                         empleadoId={empleado.id}
                         nombreCompleto={empleado.nombre_completo}

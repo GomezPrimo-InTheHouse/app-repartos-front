@@ -9,8 +9,6 @@ const ME_QUERY_KEY = ['auth', 'me']
 export function AuthProvider({ children }) {
   const queryClient = useQueryClient()
 
-  // Fuente de verdad de la sesión: no hay forma de "leer" la cookie httpOnly
-  // desde JS, así que siempre le preguntamos al backend quién está logueado.
   const meQuery = useQuery({
     queryKey: ME_QUERY_KEY,
     queryFn: fetchCurrentUser,
@@ -29,15 +27,10 @@ export function AuthProvider({ children }) {
   const logoutMutation = useMutation({
     mutationFn: logoutRequest,
     onSettled: () => {
-      // Limpiamos toda la cache de queries, no solo la de sesión: al cerrar
-      // sesión no queremos que quede dando vueltas data del negocio anterior
-      // (por si en el futuro se soporta más de un usuario en el mismo navegador).
       queryClient.clear()
     },
   })
 
-  // Si cualquier request de la app devuelve 401 "en caliente" (sesión vencida
-  // mientras se estaba usando la app), lo tratamos igual que un logout.
   useEffect(() => {
     function handleSessionExpired() {
       queryClient.setQueryData(ME_QUERY_KEY, null)
@@ -50,10 +43,6 @@ export function AuthProvider({ children }) {
   const authErrorStatus = authError?.response?.status
   const authErrorMessage = authError?.response?.data?.error ?? ''
 
-  // El backend usa 403 en /auth/me para dos casos distintos y hay que
-  // diferenciarlos por el mensaje, no alcanza con el status code:
-  // - "Usuario sin negocio asignado": admin/vendedor con propietario_id nulo (dato mal cargado)
-  // - "Usuario inactivo o sin perfil asociado": el empleado fue desactivado por su admin
   const sinNegocioAsignado =
     authErrorStatus === 403 && authErrorMessage.toLowerCase().includes('sin negocio')
   const usuarioInactivo =
@@ -61,6 +50,16 @@ export function AuthProvider({ children }) {
 
   const user = meQuery.data ?? null
   const rol = user?.rol ?? null
+  const isAdmin = rol === 'admin'
+  const isSuperAdmin = rol === 'super_admin'
+
+  // Un admin o super_admin siempre tiene acceso a todo, sin importar el
+  // array de permisos (el sistema de permisos es exclusivo para vendedor).
+  // tienePermiso() es la función que nav-items.js usa para filtrar el menú.
+  function tienePermiso(clave) {
+    if (isAdmin || isSuperAdmin) return true
+    return user?.permisos?.includes(clave) ?? false
+  }
 
   const value = {
     user,
@@ -68,12 +67,11 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(user),
     sinNegocioAsignado,
     usuarioInactivo,
-    // Flags de rol: evitan repetir `user?.rol === '...'` en cada componente.
-    // Un super_admin nunca tiene propietarioId (es intencional, no un error).
     rol,
-    isSuperAdmin: rol === 'super_admin',
-    isAdmin: rol === 'admin',
+    isSuperAdmin,
+    isAdmin,
     isVendedor: rol === 'vendedor',
+    tienePermiso,
     login: loginMutation.mutateAsync,
     isLoggingIn: loginMutation.isPending,
     loginError: loginMutation.error,

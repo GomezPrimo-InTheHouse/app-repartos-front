@@ -1,7 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { crearEmpleado } from '@/api/empleados'
+import { crearEmpleado, fetchModulosDisponibles } from '@/api/empleados'
 import { getApiErrorMessage } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,12 +9,24 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 
-const initialForm = { email: '', password: '', nombreCompleto: '', rol: 'vendedor' }
+const initialForm = {
+  email: '',
+  password: '',
+  nombreCompleto: '',
+  rol: 'vendedor',
+  permisos: [],
+}
 
 export function CrearEmpleadoSheet() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(initialForm)
   const queryClient = useQueryClient()
+
+  const { data: modulos } = useQuery({
+    queryKey: ['empleados', 'modulos-disponibles'],
+    queryFn: fetchModulosDisponibles,
+    enabled: open,
+  })
 
   const mutation = useMutation({
     mutationFn: () => crearEmpleado(form),
@@ -36,6 +48,15 @@ export function CrearEmpleadoSheet() {
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function togglePermiso(clave) {
+    setForm((prev) => ({
+      ...prev,
+      permisos: prev.permisos.includes(clave)
+        ? prev.permisos.filter((p) => p !== clave)
+        : [...prev.permisos, clave],
+    }))
   }
 
   return (
@@ -75,12 +96,10 @@ export function CrearEmpleadoSheet() {
             <Label htmlFor="emp-password">Contraseña</Label>
             <Input
               id="emp-password"
-              inputMode="numeric"
-              maxLength={6}
               required
               value={form.password}
               onChange={(e) => updateField('password', e.target.value)}
-              placeholder="6 dígitos"
+              placeholder="Contraseña"
             />
           </div>
 
@@ -96,6 +115,28 @@ export function CrearEmpleadoSheet() {
               </SelectContent>
             </Select>
           </div>
+
+          {form.rol === 'vendedor' && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Módulos permitidos</Label>
+              <p className="text-xs text-muted-foreground">
+                Sin ningún módulo marcado, este empleado no va a poder ver nada del sistema.
+              </p>
+              <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+                {modulos?.map((modulo) => (
+                  <label key={modulo.clave} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.permisos.includes(modulo.clave)}
+                      onChange={() => togglePermiso(modulo.clave)}
+                      className="size-4 rounded border-border"
+                    />
+                    {modulo.etiqueta}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           <Button type="submit" disabled={mutation.isPending} className="mt-2">
             {mutation.isPending ? 'Creando…' : 'Crear empleado'}

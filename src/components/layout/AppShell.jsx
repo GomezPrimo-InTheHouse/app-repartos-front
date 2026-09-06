@@ -21,8 +21,8 @@ export function AppShell() {
 }
 
 function DesktopSidebar() {
-  const { user, rol, logout } = useAuth()
-  const { all } = getNavItems(rol)
+  const { user, rol, tienePermiso, logout } = useAuth()
+  const { all } = getNavItems(rol, tienePermiso)
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
@@ -75,8 +75,8 @@ function SidebarLink({ item }) {
 
 function MobileBottomNav() {
   const [moreOpen, setMoreOpen] = useState(false)
-  const { rol, logout } = useAuth()
-  const { primary, secondary } = getNavItems(rol)
+  const { rol, tienePermiso, logout } = useAuth()
+  const { primary, secondary } = getNavItems(rol, tienePermiso)
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t border-border bg-card md:hidden">
@@ -86,7 +86,8 @@ function MobileBottomNav() {
 
       {/* Siempre se muestra: además de agrupar los ítems secundarios, es el
           único lugar donde vive "Cerrar sesión" en mobile. Si `secondary`
-          viene vacío (caso super_admin), el panel solo tiene el logout. */}
+          viene vacío (caso super_admin, o vendedor sin permisos secundarios),
+          el panel solo tiene el logout. */}
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
         <SheetTrigger asChild>
           <button className="flex flex-1 flex-col items-center justify-center gap-1 text-xs font-medium text-muted-foreground">

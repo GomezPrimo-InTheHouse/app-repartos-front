@@ -1,30 +1,22 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { getHomeRoute } from '@/lib/navHome'
 
 /**
  * Protege una rama de rutas por rol, además de por sesión (eso ya lo resuelve
  * `ProtectedRoute`, que debe envolver a este componente más arriba en el árbol).
  *
- * Si el usuario logueado no tiene uno de los roles permitidos, no lo mandamos
- * a una pantalla de "403" genérica: lo redirigimos a la home que le
- * corresponde según SU rol, para que la app se sienta coherente en vez de
- * mostrar un callejón sin salida.
- *
- * Uso:
- *   <Route element={<RequireRole roles={['super_admin']} />}>
- *     <Route path="/admin" element={<AdminUsuariosPage />} />
- *   </Route>
+ * Si el usuario no tiene uno de los roles permitidos, lo mandamos a SU home
+ * real (calculada según su rol/permisos, ver navHome.js) en vez de un "/"
+ * fijo — evita loops para un vendedor sin el permiso "dashboard".
  */
 export function RequireRole({ roles }) {
-  const { rol, isSuperAdmin } = useAuth()
+  const { rol, tienePermiso } = useAuth()
 
-  const tienePermiso = roles.includes(rol)
+  const tieneAcceso = roles.includes(rol)
 
-  if (!tienePermiso) {
-    // Nota: no usamos useNavigate/homeParaRol acá para no crear una dependencia
-    // circular de rutas; alcanza con saber si es super_admin o no, ya que hoy
-    // solo hay dos "hogares" posibles en la app (/admin y /).
-    return <Navigate to={isSuperAdmin ? '/admin' : '/'} replace />
+  if (!tieneAcceso) {
+    return <Navigate to={getHomeRoute(rol, tienePermiso)} replace />
   }
 
   return <Outlet />
