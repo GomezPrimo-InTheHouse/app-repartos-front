@@ -1,81 +1,30 @@
-import { apiClient } from './client'
+import axios from 'axios'
 
-// --- CRUD básico de clientes ---
+export const apiClient = axios.create({
+  baseURL: import.meta.env.PROD ? '/api' : import.meta.env.VITE_API_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
 
-export async function fetchClientes({
-  busqueda,
-  activo,
-  ordenarPor,
-  orden,
-  soloDeudores,
-  saldoMinimo,
-  barrio,
-} = {}) {
-  const { data } = await apiClient.get('/clientes', {
-    params: { busqueda, activo, ordenarPor, orden, soloDeudores, saldoMinimo, barrio },
-  })
-  return data.clientes ?? data
-}
+export const SESSION_EXPIRED_EVENT = 'auth:session-expired'
 
-export async function fetchCliente(id) {
-  const { data } = await apiClient.get(`/clientes/${id}`)
-  return data.cliente ?? data
-}
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status
+    const url = error.config?.url ?? ''
+    const esRutaDeAuth = url.includes('/auth/me') || url.includes('/auth/login')
 
-export async function crearCliente(payload) {
-  const { data } = await apiClient.post('/clientes', payload)
-  return data.cliente ?? data
-}
+    if (status === 401 && !esRutaDeAuth) {
+      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT))
+    }
 
-export async function actualizarCliente({ id, ...payload }) {
-  const { data } = await apiClient.put(`/clientes/${id}`, payload)
-  return data.cliente ?? data
-}
+    return Promise.reject(error)
+  }
+)
 
-export async function eliminarCliente(id) {
-  await apiClient.delete(`/clientes/${id}`)
-}
-
-// --- Importación masiva ---
-
-/**
- * Importación masiva de clientes desde Excel (.xlsx / .xls).
- *
- * v2: el backend ya no siempre usa IA — si detecta un encabezado
- * reconocible, procesa determinísticamente (rápido, exacto, sin variación
- * entre corridas). Solo cae a IA si el formato es atípico. También divide
- * automáticamente filas con más de un cliente pegado en la misma celda
- * (ej. "PIVIERO / Moroncini Pablo"), y omite explícitamente filas sin
- * dirección o ambiguas, en vez de adivinar o perderlas silenciosamente.
- *
- * Devuelve { totalFilasLeidas, metodoExtraccion, creados, omitidos, filasDivididas }.
- *
- * Timeout extendido a 2 minutos: sigue vigente para el caso en que el
- * backend recurra a IA como respaldo.
- */
-export async function importarClientesExcel(archivo) {
-  const formData = new FormData()
-  formData.append('archivo', archivo)
-
-  const { data } = await apiClient.post('/clientes/importar-excel', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 120000,
-  })
-  return data
-}
-
-// --- Envases retornables ---
-
-export async function fetchEnvasesCliente(clienteId) {
-  const { data } = await apiClient.get(`/clientes/${clienteId}/envases`)
-  return data.envases ?? data
-}
-
-export async function ajustarEnvaseCliente({ clienteId, productoId, delta, motivo }) {
-  const { data } = await apiClient.post(`/clientes/${clienteId}/envases/ajuste`, {
-    producto_id: productoId,
-    delta,
-    motivo,
-  })
-  return data
+export function getApiErrorMessage(error, fallback = 'Ocurrió un error inesperado') {
+  return error?.response?.data?.error ?? fallback
 }

@@ -1,5 +1,7 @@
 import { apiClient } from './client'
 
+// --- CRUD básico de clientes ---
+
 export async function fetchClientes({
   busqueda,
   activo,
@@ -7,9 +9,10 @@ export async function fetchClientes({
   orden,
   soloDeudores,
   saldoMinimo,
+  barrio,
 } = {}) {
   const { data } = await apiClient.get('/clientes', {
-    params: { busqueda, activo, ordenarPor, orden, soloDeudores, saldoMinimo },
+    params: { busqueda, activo, ordenarPor, orden, soloDeudores, saldoMinimo, barrio },
   })
   return data.clientes ?? data
 }
@@ -33,16 +36,22 @@ export async function eliminarCliente(id) {
   await apiClient.delete(`/clientes/${id}`)
 }
 
+// --- Importación masiva ---
+
 /**
- * Importación masiva de clientes desde un archivo Excel (.xlsx / .xls).
- * El backend hace todo el trabajo (parseo + mapeo de columnas vía IA) —
- * el frontend solo manda el archivo y muestra el resultado.
+ * Importación masiva de clientes desde Excel (.xlsx / .xls).
  *
- * Devuelve { totalFilasLeidas, creados, omitidos }.
+ * v2: el backend ya no siempre usa IA — si detecta un encabezado
+ * reconocible, procesa determinísticamente (rápido, exacto, sin variación
+ * entre corridas). Solo cae a IA si el formato es atípico. También divide
+ * automáticamente filas con más de un cliente pegado en la misma celda
+ * (ej. "PIVIERO / Moroncini Pablo"), y omite explícitamente filas sin
+ * dirección o ambiguas, en vez de adivinar o perderlas silenciosamente.
  *
- * Timeout extendido a 2 minutos: el procesamiento con IA puede tardar
- * bastante más que una request normal, sobre todo con archivos grandes
- * (hasta 200 filas según el límite del backend).
+ * Devuelve { totalFilasLeidas, metodoExtraccion, creados, omitidos, filasDivididas }.
+ *
+ * Timeout extendido a 2 minutos: sigue vigente para el caso en que el
+ * backend recurra a IA como respaldo.
  */
 export async function importarClientesExcel(archivo) {
   const formData = new FormData()
@@ -55,23 +64,13 @@ export async function importarClientesExcel(archivo) {
   return data
 }
 
-/**
- * Saldo de envases retornables en poder del cliente, agrupado por producto.
- * Solo devuelve productos con maneja_envase=true que tengan algún movimiento.
- * `saldo` ya viene como number, casteado por el backend (a diferencia de
- * otros campos numéricos de la app).
- */
+// --- Envases retornables ---
+
 export async function fetchEnvasesCliente(clienteId) {
   const { data } = await apiClient.get(`/clientes/${clienteId}/envases`)
   return data.envases ?? data
 }
 
-/**
- * Ajuste manual de envases (fuera del flujo de un despacho puntual).
- * delta puede ser positivo (suma envases en poder del cliente) o negativo
- * (resta), nunca 0 — eso lo valida el backend con 400.
- * Devuelve el nuevo saldo de ese producto para ese cliente.
- */
 export async function ajustarEnvaseCliente({ clienteId, productoId, delta, motivo }) {
   const { data } = await apiClient.post(`/clientes/${clienteId}/envases/ajuste`, {
     producto_id: productoId,
