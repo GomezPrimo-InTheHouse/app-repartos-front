@@ -28,7 +28,7 @@ function DesktopSidebar() {
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
       <div className="border-b border-border p-5">
         <p className="font-display text-xl font-semibold">Cuaderno</p>
-        <p className="text-xs text-muted-foreground">Gestión de fiado</p>
+        <p className="text-xs text-muted-foreground">Gestión de Logística</p>
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-3">
         {all.map((item) => (
