@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Search } from 'lucide-react'
 import { useState } from 'react'
 import { fetchClientes } from '@/api/clientes'
-import { SaldoValor } from '@/components/clientes/SaldoValor'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ClienteDetalleDialog } from '@/components/clientes/ClienteDetalleDialog'
@@ -11,6 +10,7 @@ import { ImportarClientesDialog } from '@/components/clientes/ImportarClientesDi
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { RecordCard } from '@/components/ui/record-card'
+import { SaldoValor } from '@/components/clientes/SaldoValor'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -24,26 +24,14 @@ const FILTROS = [
   { value: 'todos', label: 'Todos', activo: undefined },
 ]
 
+// Orden real, calculado por el backend (ver addendum de saldo) — no es
+// client-side, cada opción se traduce directo a query params.
 const ORDENES = [
   { value: 'nombre-asc', label: 'Nombre (A-Z)', ordenarPor: 'nombre', orden: 'asc' },
   { value: 'nombre-desc', label: 'Nombre (Z-A)', ordenarPor: 'nombre', orden: 'desc' },
   { value: 'saldo-desc', label: 'Deuda (mayor a menor)', ordenarPor: 'saldo', orden: 'desc' },
   { value: 'saldo-asc', label: 'Deuda (menor a mayor)', ordenarPor: 'saldo', orden: 'asc' },
 ]
-
-// function SaldoValor({ saldo }) {
-//   if (saldo > 0) {
-//     return <span className="font-mono-num font-semibold text-destructive">{formatCurrency(saldo)}</span>
-//   }
-//   if (saldo < 0) {
-//     return (
-//       <span className="font-mono-num font-semibold text-success">
-//         A favor {formatCurrency(Math.abs(saldo))}
-//       </span>
-//     )
-//   }
-//   return <span className="font-mono-num font-semibold text-success">Al día</span>
-// }
 
 export function ClientesPage() {
   const [busquedaInput, setBusquedaInput] = useState('')
@@ -150,7 +138,11 @@ export function ClientesPage() {
               fields={[
                 { label: 'Saldo', value: <SaldoValor saldo={cliente.saldo} /> },
                 { label: 'Teléfono', value: cliente.telefono },
-                { label: 'Días de crédito', value: cliente.dias_credito },
+                // Localidad reemplaza a "Días de crédito" en la vista de
+                // card: el negocio reparte en varias ciudades, así que
+                // identificar de un vistazo dónde está el cliente es más
+                // útil acá que un dato que ya se ve en el detalle.
+                { label: 'Localidad', value: cliente.localidad },
                 {
                   label: 'Límite de crédito',
                   value: cliente.limite_credito > 0 ? formatCurrency(cliente.limite_credito) : 'Sin límite',

@@ -28,6 +28,9 @@ export function ClienteDetalleDialog({ cliente, trigger }) {
   const [confirmEliminarOpen, setConfirmEliminarOpen] = useState(false)
   const queryClient = useQueryClient()
 
+  // Envases: se traen recién al abrir el dialog (enabled: open), ya que el
+  // listado general de clientes no los incluye — misma lógica que el
+  // detalle de despacho con sus items.
   const { data: envases } = useQuery({
     queryKey: ['clientes', cliente.id, 'envases'],
     queryFn: () => fetchEnvasesCliente(cliente.id),
@@ -46,6 +49,12 @@ export function ClienteDetalleDialog({ cliente, trigger }) {
       toast.error(getApiErrorMessage(error, 'No se pudo dar de baja al cliente'))
     },
   })
+
+  // Dirección completa: arma "Dirección, Barrio, Localidad" solo con las
+  // partes que existan, sin comas colgando si falta alguna.
+  const direccionCompleta = [cliente.direccion, cliente.barrio, cliente.localidad]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -68,8 +77,10 @@ export function ClienteDetalleDialog({ cliente, trigger }) {
             mono
           />
           <DetalleCampo label="Cliente desde" value={formatDate(cliente.created_at)} />
-          <DetalleCampo label="Dirección" value={cliente.direccion} span2 />
-          <DetalleCampo label="Notas" value={cliente.notas} span2 />
+          <DetalleCampo label="Dirección" value={direccionCompleta || cliente.direccion} span2 />
+          {cliente.notas && (
+            <DetalleCampo label="Notas / instrucciones de entrega" value={cliente.notas} span2 />
+          )}
         </div>
 
         <div className="flex flex-col gap-2 border-t border-border pt-3">
