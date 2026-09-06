@@ -138,10 +138,6 @@ export function ClientesPage() {
               fields={[
                 { label: 'Saldo', value: <SaldoValor saldo={cliente.saldo} /> },
                 { label: 'Teléfono', value: cliente.telefono },
-                // Localidad reemplaza a "Días de crédito" en la vista de
-                // card: el negocio reparte en varias ciudades, así que
-                // identificar de un vistazo dónde está el cliente es más
-                // útil acá que un dato que ya se ve en el detalle.
                 { label: 'Localidad', value: cliente.localidad },
                 {
                   label: 'Límite de crédito',

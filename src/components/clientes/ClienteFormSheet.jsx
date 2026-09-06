@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 
 const camposIniciales = {
   nombre: '',
+  dni: '',
   telefono: '',
   direccion: '',
   barrio: '',
@@ -26,6 +27,7 @@ function formDesdeCliente(cliente) {
   if (!cliente) return camposIniciales
   return {
     nombre: cliente.nombre ?? '',
+    dni: cliente.dni ?? '',
     telefono: cliente.telefono ?? '',
     direccion: cliente.direccion ?? '',
     barrio: cliente.barrio ?? '',
@@ -53,6 +55,9 @@ export function ClienteFormSheet({ cliente, trigger }) {
     mutationFn: () => {
       const payload = {
         ...form,
+        // dni vacío se manda como null, no como string vacío — el backend
+        // lo trata como "sin DNI cargado" (campo opcional).
+        dni: form.dni.trim() || null,
         dias_credito: Number(form.dias_credito) || 0,
         limite_credito: Number(form.limite_credito) || 0,
       }
@@ -81,6 +86,13 @@ export function ClienteFormSheet({ cliente, trigger }) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
+  // Filtra cualquier carácter no numérico a medida que se tipea — evita
+  // depender solo de la validación del backend para el caso más común
+  // (usuario escribe puntos o espacios en el DNI sin querer).
+  function handleDniChange(value) {
+    updateField('dni', value.replace(/\D/g, ''))
+  }
+
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
@@ -94,6 +106,13 @@ export function ClienteFormSheet({ cliente, trigger }) {
             <Input id="cli-nombre" required value={form.nombre}
               onChange={(e) => updateField('nombre', e.target.value)} placeholder="Nombre y apellido" />
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cli-dni">DNI</Label>
+            <Input id="cli-dni" inputMode="numeric" value={form.dni}
+              onChange={(e) => handleDniChange(e.target.value)} placeholder="Opcional — solo números" />
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cli-telefono">Teléfono</Label>
             <Input id="cli-telefono" type="tel" value={form.telefono}
@@ -105,9 +124,6 @@ export function ClienteFormSheet({ cliente, trigger }) {
               onChange={(e) => updateField('direccion', e.target.value)} placeholder="Opcional" />
           </div>
 
-          {/* Barrio y localidad: texto libre, sin lista fija (addendum
-              barrio/localidad) — el negocio reparte en más de una ciudad,
-              así que localidad permite diferenciarlas. */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="cli-barrio">Barrio</Label>

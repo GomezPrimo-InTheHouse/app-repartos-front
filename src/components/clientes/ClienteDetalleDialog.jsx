@@ -69,6 +69,7 @@ export function ClienteDetalleDialog({ cliente, trigger }) {
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <DetalleCampo label="Saldo" value={<SaldoValor saldo={cliente.saldo} />} span2 />
+          <DetalleCampo label="DNI" value={cliente.dni} mono />
           <DetalleCampo label="Teléfono" value={cliente.telefono} />
           <DetalleCampo label="Días de crédito" value={cliente.dias_credito} mono />
           <DetalleCampo
