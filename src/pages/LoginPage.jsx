@@ -21,7 +21,15 @@ export function LoginPage() {
     event.preventDefault()
     setError(null)
     try {
-      await login({ email, password })
+      // Se normaliza acá, justo antes de enviar, en vez de en cada
+      // onChange — así el usuario ve en pantalla exactamente lo que
+      // escribió, pero lo que viaja al backend ya está limpio de
+      // mayúsculas/espacios que a veces agrega el teclado predictivo
+      // (sobre todo en iOS).
+      await login({
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
+      })
     } catch (err) {
       setError(getApiErrorMessage(err, 'Email o clave incorrectos'))
     }
@@ -47,7 +55,10 @@ export function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  autoComplete="username"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -57,15 +68,15 @@ export function LoginPage() {
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="password">Clave</Label>
-<Input
-  id="password"
-  type="password"
-  autoComplete="current-password"
-  required
-  value={password}
-  onChange={(e) => setPassword(e.target.value)}
-  placeholder="Tu clave"
-/>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Tu clave"
+                />
               </div>
 
               {error && (
