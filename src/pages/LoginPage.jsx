@@ -32,7 +32,7 @@ export function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <p className="font-display text-3xl font-semibold">Cuaderno</p>
-          <p className="text-sm text-muted-foreground">Gestión de clientes y fiado</p>
+          <p className="text-sm text-muted-foreground">Gestión de logística</p>
         </div>
 
         <Card>
