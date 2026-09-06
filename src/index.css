@@ -101,15 +101,6 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    /* Textura sutil tipo papel de cuaderno: renglones horizontales muy tenues */
-    background-image: repeating-linear-gradient(
-      to bottom,
-      transparent,
-      transparent 31px,
-      var(--color-paper-line) 31px,
-      var(--color-paper-line) 32px
-    );
-    background-attachment: local;
   }
   .font-display {
     font-family: var(--font-display);
