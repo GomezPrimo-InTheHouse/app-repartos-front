@@ -9,17 +9,6 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
-/**
- * ConfirmDialog genérico, reutilizable para confirmaciones de edición y eliminación.
- *
- * Dos modos de uso:
- * 1) Con `trigger`: el propio dialog maneja su estado abierto/cerrado (ej. botón "Eliminar").
- * 2) Controlado: se pasan `open` y `onOpenChange` desde afuera, sin `trigger`
- *    (ej. interceptar el submit de un form para pedir confirmación antes de guardar).
- *
- * En ambos modos, `onConfirm` puede ser async — mientras esté pendiente, el botón
- * de confirmar muestra `confirmingLabel` y se deshabilita junto con "Cancelar".
- */
 export function ConfirmDialog({
   trigger,
   open,
@@ -35,6 +24,14 @@ export function ConfirmDialog({
 }) {
   async function handleConfirm() {
     await onConfirm?.()
+    // Se cierra siempre al confirmar, igual que "Cancelar" — sin esto,
+    // el dialog quedaba abierto después de guardar salvo que algo externo
+    // lo cerrara.
+    onOpenChange?.(false)
+  }
+
+  function handleCancel() {
+    onOpenChange?.(false)
   }
 
   return (
@@ -50,7 +47,7 @@ export function ConfirmDialog({
             type="button"
             variant="ghost"
             disabled={isPending}
-            onClick={() => onOpenChange?.(false)}
+            onClick={handleCancel}
           >
             {cancelLabel}
           </Button>

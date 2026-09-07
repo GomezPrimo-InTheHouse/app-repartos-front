@@ -14,6 +14,9 @@ import { cn } from '@/lib/utils'
  *   largo no infle la altura del header y desalinee la fila.
  * - El footer usa `mt-auto`, así los botones quedan siempre pegados abajo
  *   de la card, sin importar cuánto contenido tenga el resto.
+ * - El footer tiene `pt-3 pb-1` (antes `pt-2` y sin `pb`, apoyado solo en
+ *   el `py-3` general de la Card): los botones quedaban casi pegados a la
+ *   línea divisoria de arriba y muy justos abajo.
  */
 export function RecordCard({ title, badge, fields = [], actions, className }) {
   return (
@@ -37,7 +40,7 @@ export function RecordCard({ title, badge, fields = [], actions, className }) {
       )}
 
       {actions && (
-        <CardFooter className="mt-auto flex justify-end gap-1.5 border-t border-border px-3 pt-2">
+        <CardFooter className="mt-auto flex justify-end gap-1.5 border-t border-border px-3 pb-1 pt-3">
           {actions}
         </CardFooter>
       )}

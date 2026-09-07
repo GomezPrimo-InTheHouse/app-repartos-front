@@ -60,7 +60,11 @@ export function ClienteDetalleDialog({ cliente, trigger }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        {/* flex-col en vez de flex-row justify-between: el badge quedaba a
+            la derecha, justo donde DialogContent posiciona el botón "✕" de
+            cerrar, y se superponían. Ahora el badge va debajo del nombre.
+            pr-8 deja aire para el "✕" por si el nombre es largo. */}
+        <DialogHeader className="flex flex-col items-start gap-1.5 space-y-0 pr-8">
           <DialogTitle>{cliente.nombre}</DialogTitle>
           <Badge variant={cliente.activo ? 'success' : 'destructive'}>
             {cliente.activo ? 'Activo' : 'Inactivo'}
