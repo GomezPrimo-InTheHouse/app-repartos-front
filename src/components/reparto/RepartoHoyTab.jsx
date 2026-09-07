@@ -60,17 +60,22 @@ function ClienteItemCard({ ejecucionId, item }) {
   return (
     <div className={`flex flex-col gap-2 rounded-md border p-3 ${item.visitado ? 'border-success bg-success-soft' : 'border-border bg-card'}`}>
       <div className="flex items-center justify-between gap-2">
-        <label className="flex items-center gap-2 text-sm font-medium">
+        <label className="flex min-w-0 items-center gap-2 text-sm font-medium">
           <input
             type="checkbox"
             checked={item.visitado}
             onChange={(e) => visitarMutation.mutate(e.target.checked)}
             disabled={visitarMutation.isPending}
-            className="size-4 rounded border-border"
+            className="size-4 shrink-0 rounded border-border"
           />
-          {item.cliente_nombre}
+          <span className="truncate">
+            {item.cliente_nombre}
+            {item.direccion && (
+              <span className="font-normal text-muted-foreground"> — {item.direccion}</span>
+            )}
+          </span>
         </label>
-        {item.visitado && <Badge variant="success">Visitado</Badge>}
+        {item.visitado && <Badge variant="success" className="shrink-0">Visitado</Badge>}
       </div>
 
       <div className="flex flex-col gap-1.5 pl-6">
