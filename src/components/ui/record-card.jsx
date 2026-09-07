@@ -40,7 +40,7 @@ export function RecordCard({ title, badge, fields = [], actions, className }) {
       )}
 
       {actions && (
-        <CardFooter className="mt-auto flex justify-end gap-1.5 border-t border-border px-3 pb-3 pt-3">
+        <CardFooter className="mt-auto flex justify-end gap-1.5  px-3 pb-3 pt-3">
           {actions}
         </CardFooter>
       )}
