@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { useState } from 'react'
-import { fetchClientes } from '@/api/clientes'
+import { fetchClientesPaginado } from '@/api/clientes'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ClienteDetalleDialog } from '@/components/clientes/ClienteDetalleDialog'
@@ -24,8 +24,6 @@ const FILTROS = [
   { value: 'todos', label: 'Todos', activo: undefined },
 ]
 
-// Orden real, calculado por el backend (ver addendum de saldo) — no es
-// client-side, cada opción se traduce directo a query params.
 const ORDENES = [
   { value: 'nombre-asc', label: 'Nombre (A-Z)', ordenarPor: 'nombre', orden: 'asc' },
   { value: 'nombre-desc', label: 'Nombre (Z-A)', ordenarPor: 'nombre', orden: 'desc' },
@@ -33,26 +31,44 @@ const ORDENES = [
   { value: 'saldo-asc', label: 'Deuda (menor a mayor)', ordenarPor: 'saldo', orden: 'asc' },
 ]
 
+const POR_PAGINA = 15
+
 export function ClientesPage() {
   const [busquedaInput, setBusquedaInput] = useState('')
   const [filtro, setFiltro] = useState('activos')
   const [ordenValue, setOrdenValue] = useState('nombre-asc')
   const [soloDeudores, setSoloDeudores] = useState(false)
+  const [pagina, setPagina] = useState(0)
   const busqueda = useDebouncedValue(busquedaInput)
   const activo = FILTROS.find((f) => f.value === filtro)?.activo
   const { ordenarPor, orden } = ORDENES.find((o) => o.value === ordenValue)
 
-  const { data: clientes, isLoading, isError } = useQuery({
-    queryKey: ['clientes', { busqueda, activo, ordenarPor, orden, soloDeudores }],
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['clientes', { busqueda, activo, ordenarPor, orden, soloDeudores, pagina }],
     queryFn: () =>
-      fetchClientes({
+      fetchClientesPaginado({
         busqueda: busqueda || undefined,
         activo,
         ordenarPor,
         orden,
         soloDeudores: soloDeudores || undefined,
+        limit: POR_PAGINA,
+        offset: pagina * POR_PAGINA,
       }),
   })
+
+  const clientes = data?.clientes ?? []
+  const total = data?.total ?? 0
+  const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA))
+
+  // Cualquier cambio de filtro/búsqueda/orden vuelve a la página 1 — evita
+  // quedar "colgado" en una página que ya no existe con el nuevo filtro.
+  function actualizarFiltro(setter) {
+    return (value) => {
+      setter(value)
+      setPagina(0)
+    }
+  }
 
   return (
     <>
@@ -70,15 +86,22 @@ export function ClientesPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={busquedaInput} onChange={(e) => setBusquedaInput(e.target.value)}
-              placeholder="Buscar por nombre…" className="pl-9" />
+            <Input
+              value={busquedaInput}
+              onChange={(e) => {
+                setBusquedaInput(e.target.value)
+                setPagina(0)
+              }}
+              placeholder="Buscar por nombre…"
+              className="pl-9"
+            />
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex gap-1 rounded-md border border-border p-1">
               {FILTROS.map((f) => (
                 <Button key={f.value} type="button" size="sm" variant="ghost"
-                  onClick={() => setFiltro(f.value)}
+                  onClick={() => actualizarFiltro(setFiltro)(f.value)}
                   className={cn('flex-1', filtro === f.value && 'bg-secondary text-secondary-foreground')}>
                   {f.label}
                 </Button>
@@ -89,12 +112,12 @@ export function ClientesPage() {
               type="button"
               size="sm"
               variant={soloDeudores ? 'accent' : 'outline'}
-              onClick={() => setSoloDeudores((prev) => !prev)}
+              onClick={() => actualizarFiltro(setSoloDeudores)((prev) => !prev)}
             >
               Solo deudores
             </Button>
 
-            <Select value={ordenValue} onValueChange={setOrdenValue}>
+            <Select value={ordenValue} onValueChange={actualizarFiltro(setOrdenValue)}>
               <SelectTrigger className="w-full sm:w-56">
                 <SelectValue placeholder="Ordenar por…" />
               </SelectTrigger>
@@ -115,7 +138,7 @@ export function ClientesPage() {
             No se pudo cargar el listado de clientes.
           </p>
         )}
-        {clientes?.length === 0 && (
+        {!isLoading && clientes.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {soloDeudores
               ? 'No hay clientes con deuda pendiente.'
@@ -125,8 +148,8 @@ export function ClientesPage() {
           </p>
         )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {clientes?.map((cliente) => (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {clientes.map((cliente) => (
             <RecordCard
               key={cliente.id}
               title={cliente.nombre}
@@ -140,7 +163,7 @@ export function ClientesPage() {
                 { label: 'Teléfono', value: cliente.telefono },
                 { label: 'Localidad', value: cliente.localidad },
                 {
-                  label: 'Límite de crédito',
+                  label: 'Límite',
                   value: cliente.limite_credito > 0 ? formatCurrency(cliente.limite_credito) : 'Sin límite',
                 },
               ]}
@@ -155,6 +178,39 @@ export function ClientesPage() {
             />
           ))}
         </div>
+
+        {total > 0 && (
+          <div className="flex items-center justify-between border-t border-border pt-4">
+            <p className="text-sm text-muted-foreground">
+              Mostrando {clientes.length} de {total}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={pagina === 0}
+                onClick={() => setPagina((p) => p - 1)}
+              >
+                <ChevronLeft className="size-4" />
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Página {pagina + 1} de {totalPaginas}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={pagina + 1 >= totalPaginas}
+                onClick={() => setPagina((p) => p + 1)}
+              >
+                Siguiente
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )
