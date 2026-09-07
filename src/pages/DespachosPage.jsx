@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { fetchClientes } from '@/api/clientes'
 import { fetchDespachos } from '@/api/despachos'
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { NuevoDespachoDialog } from '@/components/despachos/NuevoDespachoDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { RecordCard } from '@/components/ui/record-card'
+import { RepartoDelDiaDialog } from '@/components/despachos/RepartoDelDiaDialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -65,7 +66,19 @@ export function DespachosPage() {
       <PageHeader
         title="Despachos"
         description="Registro de ventas a clientes"
-        actions={<NuevoDespachoDialog trigger={<Button>Nuevo despacho</Button>} />}
+        actions={
+          <div className="flex gap-2">
+            <RepartoDelDiaDialog
+              trigger={
+                <Button variant="outline">
+                  <CalendarDays className="size-4" />
+                  Reparto de hoy
+                </Button>
+              }
+            />
+            <NuevoDespachoDialog trigger={<Button>Nuevo despacho</Button>} />
+          </div>
+        }
       />
       <div className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -122,7 +135,7 @@ export function DespachosPage() {
           </p>
         )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {despachos.map((despacho) => (
             <RecordCard
               key={despacho.id}

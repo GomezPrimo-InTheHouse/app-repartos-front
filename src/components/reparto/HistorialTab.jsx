@@ -40,19 +40,28 @@ function DetalleEjecucionDialog({ ejecucionId, trigger }) {
               .map((item) => (
                 <div key={item.id} className="flex flex-col gap-1 rounded-md bg-muted p-3 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">{item.cliente_nombre}</span>
+                    <span className="font-medium">
+                      {item.cliente_nombre}
+                      {item.direccion && (
+                        <span className="font-normal text-muted-foreground"> — {item.direccion}</span>
+                      )}
+                    </span>
                     <Badge variant={item.visitado ? 'success' : 'destructive'}>
                       {item.visitado ? 'Visitado' : 'No visitado'}
                     </Badge>
                   </div>
-                  {item.productos.map((producto) => (
-                    <div key={producto.producto_id} className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{producto.producto_nombre}</span>
-                      <span className="font-mono-num">
-                        estimado: {producto.cantidad_estimada} — real: {producto.cantidad_real ?? '—'}
-                      </span>
-                    </div>
-                  ))}
+                  {item.productos.length > 0 ? (
+                    item.productos.map((producto) => (
+                      <div key={producto.producto_id} className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{producto.producto_nombre}</span>
+                        <span className="font-mono-num">{producto.cantidad}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {item.visitado ? 'Visitado sin despacho registrado.' : 'Sin despachos ese día.'}
+                    </p>
+                  )}
                 </div>
               ))}
           </div>
@@ -111,7 +120,7 @@ export function HistorialTab() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {ejecuciones?.map((ejecucion) => (
           <RecordCard
             key={ejecucion.id}

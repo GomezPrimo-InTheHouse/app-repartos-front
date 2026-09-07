@@ -19,24 +19,44 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { formatCurrency } from '@/lib/format'
 
-const estadoInicial = {
-  clienteId: '',
+const estadoInicial = (clienteIdInicial) => ({
+  clienteId: clienteIdInicial ?? '',
   productoIdParaAgregar: '',
   cantidadParaAgregar: '1',
   envasesDevueltosParaAgregar: '0',
   items: [],
   notas: '',
-}
+})
 
-export function NuevoDespachoDialog({ trigger }) {
-  const [open, setOpen] = useState(false)
-  const [estado, setEstado] = useState(estadoInicial)
+/**
+ * Nuevo despacho. Soporta:
+ * - Uso normal: trigger propio, cliente elegible libremente.
+ * - Uso desde "Reparto de hoy" (Despachos): open/onOpenChange controlados,
+ *   clienteIdInicial fijo (el selector de cliente se oculta/bloquea), y
+ *   onDespachoCreado(callback) para que el dialog que lo abrió pueda
+ *   refrescar su propia lista al confirmar.
+ */
+export function NuevoDespachoDialog({
+  trigger,
+  open: openControlado,
+  onOpenChange: onOpenChangeControlado,
+  clienteIdInicial,
+  clienteNombreInicial,
+  onDespachoCreado,
+}) {
+  const [openInterno, setOpenInterno] = useState(false)
+  const esControlado = openControlado !== undefined
+  const open = esControlado ? openControlado : openInterno
+  const setOpen = esControlado ? onOpenChangeControlado : setOpenInterno
+  const clienteFijo = Boolean(clienteIdInicial)
+
+  const [estado, setEstado] = useState(() => estadoInicial(clienteIdInicial))
   const queryClient = useQueryClient()
 
   const { data: clientes } = useQuery({
     queryKey: ['clientes', { activo: true, paraSelector: true }],
     queryFn: () => fetchClientes({ activo: true }),
-    enabled: open,
+    enabled: open && !clienteFijo,
   })
 
   const { data: productos } = useQuery({
@@ -51,17 +71,20 @@ export function NuevoDespachoDialog({ trigger }) {
     enabled: open && Boolean(estado.clienteId),
   })
 
-  const clienteSeleccionado = clientes?.find((c) => c.id === estado.clienteId)
+  const clienteSeleccionado = clienteFijo
+    ? { id: clienteIdInicial, nombre: clienteNombreInicial }
+    : clientes?.find((c) => c.id === estado.clienteId)
   const productoParaAgregar = productos?.find((p) => p.id === estado.productoIdParaAgregar)
   const totalCarrito = estado.items.reduce((acc, item) => acc + item.subtotal, 0)
 
+  const clienteConSaldo = clientes?.find((c) => c.id === estado.clienteId)
   const alertaCreditoPreview =
-    clienteSeleccionado &&
-    clienteSeleccionado.limite_credito > 0 &&
-    clienteSeleccionado.saldo + totalCarrito > clienteSeleccionado.limite_credito
+    clienteConSaldo &&
+    clienteConSaldo.limite_credito > 0 &&
+    clienteConSaldo.saldo + totalCarrito > clienteConSaldo.limite_credito
 
   function resetEstado() {
-    setEstado(estadoInicial)
+    setEstado(estadoInicial(clienteIdInicial))
   }
 
   function handleOpenChange(nextOpen) {
@@ -122,10 +145,7 @@ export function NuevoDespachoDialog({ trigger }) {
   }
 
   function handleQuitarItem(productoId) {
-    setEstado((prev) => ({
-      ...prev,
-      items: prev.items.filter((i) => i.producto_id !== productoId),
-    }))
+    setEstado((prev) => ({ ...prev, items: prev.items.filter((i) => i.producto_id !== productoId) }))
   }
 
   const mutation = useMutation({
@@ -146,6 +166,8 @@ export function NuevoDespachoDialog({ trigger }) {
       }
       queryClient.invalidateQueries({ queryKey: ['despachos'] })
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
+      queryClient.invalidateQueries({ queryKey: ['repartos', 'hoy'] })
+      onDespachoCreado?.(despacho)
       setOpen(false)
     },
     onError: (error) => {
@@ -168,32 +190,36 @@ export function NuevoDespachoDialog({ trigger }) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Nuevo despacho</DialogTitle>
-          <DialogDescription>Elegí el cliente y armá el carrito de productos.</DialogDescription>
+          <DialogDescription>
+            {clienteFijo
+              ? `Registrando despacho para ${clienteNombreInicial}.`
+              : 'Elegí el cliente y armá el carrito de productos.'}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="desp-cliente">Cliente</Label>
-            <Select
-              value={estado.clienteId}
-              onValueChange={(value) => setEstado((prev) => ({ ...prev, clienteId: value }))}
-            >
-              <SelectTrigger id="desp-cliente">
-                <SelectValue placeholder="Elegí un cliente…" />
-              </SelectTrigger>
-              <SelectContent>
-                {clientes?.map((cliente) => (
-                  <SelectItem key={cliente.id} value={cliente.id}>
-                    {cliente.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!clienteFijo && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="desp-cliente">Cliente</Label>
+              <Select
+                value={estado.clienteId}
+                onValueChange={(value) => setEstado((prev) => ({ ...prev, clienteId: value }))}
+              >
+                <SelectTrigger id="desp-cliente">
+                  <SelectValue placeholder="Elegí un cliente…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clientes?.map((cliente) => (
+                    <SelectItem key={cliente.id} value={cliente.id}>{cliente.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {alertaCreditoPreview && (
             <div className="rounded-md bg-warning-soft px-3 py-2 text-sm text-foreground">
@@ -232,10 +258,7 @@ export function NuevoDespachoDialog({ trigger }) {
                 </SelectContent>
               </Select>
               <Input
-                type="number"
-                min="1"
-                inputMode="numeric"
-                className="w-20"
+                type="number" min="1" inputMode="numeric" className="w-20"
                 value={estado.cantidadParaAgregar}
                 onChange={(e) => setEstado((prev) => ({ ...prev, cantidadParaAgregar: e.target.value }))}
               />
@@ -250,15 +273,9 @@ export function NuevoDespachoDialog({ trigger }) {
                   Envases vacíos que devuelve el cliente
                 </Label>
                 <Input
-                  id="envases-devueltos"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
-                  className="w-24"
+                  id="envases-devueltos" type="number" min="0" inputMode="numeric" className="w-24"
                   value={estado.envasesDevueltosParaAgregar}
-                  onChange={(e) =>
-                    setEstado((prev) => ({ ...prev, envasesDevueltosParaAgregar: e.target.value }))
-                  }
+                  onChange={(e) => setEstado((prev) => ({ ...prev, envasesDevueltosParaAgregar: e.target.value }))}
                 />
               </div>
             )}
@@ -267,27 +284,18 @@ export function NuevoDespachoDialog({ trigger }) {
           {estado.items.length > 0 && (
             <div className="flex flex-col gap-2">
               {estado.items.map((item) => (
-                <div
-                  key={item.producto_id}
-                  className="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-sm"
-                >
+                <div key={item.producto_id} className="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-sm">
                   <div>
                     <span className="font-medium">{item.nombre}</span>
                     <span className="text-muted-foreground"> × {item.cantidad}</span>
                     {item.maneja_envase && (
-                      <Badge variant="outline" className="ml-2">
-                        {item.envases_devueltos ?? 0} devueltos
-                      </Badge>
+                      <Badge variant="outline" className="ml-2">{item.envases_devueltos ?? 0} devueltos</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-mono-num">{formatCurrency(item.subtotal)}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleQuitarItem(item.producto_id)}
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label={`Quitar ${item.nombre}`}
-                    >
+                    <button type="button" onClick={() => handleQuitarItem(item.producto_id)}
+                      className="text-muted-foreground hover:text-destructive" aria-label={`Quitar ${item.nombre}`}>
                       <Trash2 className="size-4" />
                     </button>
                   </div>
@@ -302,12 +310,9 @@ export function NuevoDespachoDialog({ trigger }) {
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="desp-notas">Notas</Label>
-            <Textarea
-              id="desp-notas"
-              value={estado.notas}
+            <Textarea id="desp-notas" value={estado.notas}
               onChange={(e) => setEstado((prev) => ({ ...prev, notas: e.target.value }))}
-              placeholder="Opcional"
-            />
+              placeholder="Opcional" />
           </div>
 
           <DialogFooter>

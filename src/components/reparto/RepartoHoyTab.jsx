@@ -1,111 +1,43 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
 import { toast } from 'sonner'
 import { getApiErrorMessage } from '@/api/client'
 import { actualizarItemEjecucion, completarEjecucion, fetchRepartoHoy } from '@/api/repartos'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 
 /**
- * Fila de un cliente dentro de una ejecución. Mantiene su propio estado
- * local de cantidades reales (arranca pre-cargado con la cantidad
- * estimada, editable), independiente del checkbox "Visitado" — son dos
- * acciones separadas, tal como se definió.
+ * Vista de SOLO LECTURA del reparto de hoy — el seguimiento (visitado +
+ * productos reales) se calcula solo desde los despachos reales del día;
+ * las acciones de carga (crear despacho, marcar visitado sin despacho)
+ * viven en el dialog "Reparto de hoy" accesible desde el módulo Despachos.
+ * Acá solo se puede ver el estado y cerrar el reparto del día.
  */
-function ClienteItemCard({ ejecucionId, item }) {
-  const [cantidades, setCantidades] = useState(() =>
-    Object.fromEntries(
-      item.productos.map((p) => [
-        p.producto_id,
-        String(p.cantidad_real ?? p.cantidad_estimada ?? 0),
-      ])
-    )
-  )
-  const queryClient = useQueryClient()
-
-  const visitarMutation = useMutation({
-    mutationFn: (visitado) => actualizarItemEjecucion({ ejecucionId, itemId: item.id, visitado }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['repartos', 'hoy'] })
-    },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'No se pudo actualizar'))
-    },
-  })
-
-  const guardarCantidadesMutation = useMutation({
-    mutationFn: () =>
-      actualizarItemEjecucion({
-        ejecucionId,
-        itemId: item.id,
-        productos: item.productos.map((p) => ({
-          producto_id: p.producto_id,
-          cantidad_real: Number(cantidades[p.producto_id]) || 0,
-        })),
-      }),
-    onSuccess: () => {
-      toast.success(`Cantidades de ${item.cliente_nombre} guardadas`)
-      queryClient.invalidateQueries({ queryKey: ['repartos', 'hoy'] })
-    },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'No se pudieron guardar las cantidades'))
-    },
-  })
-
-  function actualizarCantidad(productoId, valor) {
-    setCantidades((prev) => ({ ...prev, [productoId]: valor }))
-  }
-
+function ClienteItemRow({ item }) {
   return (
-    <div className={`flex flex-col gap-2 rounded-md border p-3 ${item.visitado ? 'border-success bg-success-soft' : 'border-border bg-card'}`}>
+    <div className={`flex flex-col gap-1.5 rounded-md border p-3 ${item.visitado ? 'border-success bg-success-soft' : 'border-border bg-card'}`}>
       <div className="flex items-center justify-between gap-2">
-        <label className="flex min-w-0 items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={item.visitado}
-            onChange={(e) => visitarMutation.mutate(e.target.checked)}
-            disabled={visitarMutation.isPending}
-            className="size-4 shrink-0 rounded border-border"
-          />
-          <span className="truncate">
-            {item.cliente_nombre}
-            {item.direccion && (
-              <span className="font-normal text-muted-foreground"> — {item.direccion}</span>
-            )}
-          </span>
-        </label>
-        {item.visitado && <Badge variant="success" className="shrink-0">Visitado</Badge>}
+        <span className="min-w-0 truncate text-sm font-medium">
+          {item.cliente_nombre}
+          {item.direccion && (
+            <span className="font-normal text-muted-foreground"> — {item.direccion}</span>
+          )}
+        </span>
+        <Badge variant={item.visitado ? 'success' : 'outline'} className="shrink-0">
+          {item.visitado ? 'Visitado' : 'Pendiente'}
+        </Badge>
       </div>
 
-      <div className="flex flex-col gap-1.5 pl-6">
-        {item.productos.map((producto) => (
-          <div key={producto.producto_id} className="flex items-center gap-2 text-sm">
-            <span className="flex-1 text-muted-foreground">
-              {producto.producto_nombre}
-              <span className="ml-1 text-xs">(estimado: {producto.cantidad_estimada})</span>
-            </span>
-            <Input
-              type="number"
-              min="0"
-              inputMode="numeric"
-              className="w-20"
-              value={cantidades[producto.producto_id]}
-              onChange={(e) => actualizarCantidad(producto.producto_id, e.target.value)}
-            />
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-1 self-start"
-          onClick={() => guardarCantidadesMutation.mutate()}
-          disabled={guardarCantidadesMutation.isPending}
-        >
-          {guardarCantidadesMutation.isPending ? 'Guardando…' : 'Guardar cantidades'}
-        </Button>
-      </div>
+      {item.productos.length > 0 ? (
+        <div className="flex flex-col gap-0.5 pl-1 text-xs text-muted-foreground">
+          {item.productos.map((p) => (
+            <span key={p.producto_id}>{p.producto_nombre} × {p.cantidad}</span>
+          ))}
+        </div>
+      ) : (
+        item.visitado && (
+          <p className="pl-1 text-xs text-muted-foreground">Visitado sin despacho registrado.</p>
+        )
+      )}
     </div>
   )
 }
@@ -140,12 +72,7 @@ function EjecucionCard({ ejecucion }) {
             {ejecucion.estado === 'completado' ? 'Completado' : 'Pendiente'}
           </Badge>
           {ejecucion.estado !== 'completado' && (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => completarMutation.mutate()}
-              disabled={completarMutation.isPending}
-            >
+            <Button type="button" size="sm" onClick={() => completarMutation.mutate()} disabled={completarMutation.isPending}>
               {completarMutation.isPending ? 'Cerrando…' : 'Cerrar reparto'}
             </Button>
           )}
@@ -157,7 +84,7 @@ function EjecucionCard({ ejecucion }) {
           .slice()
           .sort((a, b) => a.orden - b.orden)
           .map((item) => (
-            <ClienteItemCard key={item.id} ejecucionId={ejecucion.id} item={item} />
+            <ClienteItemRow key={item.id} item={item} />
           ))}
       </div>
     </div>
@@ -172,6 +99,11 @@ export function RepartoHoyTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-xs text-muted-foreground">
+        Para registrar despachos y marcar visitas, andá al módulo de Despachos → "Reparto de hoy".
+        Acá solo se ve el seguimiento.
+      </p>
+
       {isLoading && <p className="py-8 text-center text-sm text-muted-foreground">Cargando…</p>}
       {isError && (
         <p className="py-8 text-center text-sm text-destructive">No se pudo cargar el reparto de hoy.</p>
