@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Package } from 'lucide-react'
 import { useState } from 'react'
 import { fetchClientes } from '@/api/clientes'
 import { fetchDespachos } from '@/api/despachos'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ClienteComboboxFiltro } from '@/components/despachos/ClienteComboboxFiltro'
 import { DespachoDetalleDialog } from '@/components/despachos/DespachoDetalleDialog'
 import { Input } from '@/components/ui/input'
 import { NuevoDespachoDialog } from '@/components/despachos/NuevoDespachoDialog'
@@ -23,6 +24,31 @@ const ESTADOS = [
 ]
 
 const POR_PAGINA = 8
+
+/**
+ * Badges de categoría de despacho — arma la pila de badges de arriba a la
+ * derecha de la card, distinguiendo las 3 categorías posibles:
+ * - "venta" sin devolución de envases (badge de estado solo)
+ * - "venta" con devolución de envases (+ "Con devolución")
+ * - "solo_devolucion" (+ "Solo devolución", reemplaza el sentido de "venta")
+ * Más el badge de alerta de crédito si corresponde, que es independiente.
+ */
+function BadgesDespacho({ despacho }) {
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Badge variant={despacho.estado === 'entregado' ? 'success' : 'destructive'}>
+        {despacho.estado === 'entregado' ? 'Entregado' : 'Anulado'}
+      </Badge>
+      {despacho.tipo === 'solo_devolucion' && (
+        <Badge variant="outline">Solo devolución</Badge>
+      )}
+      {despacho.tipo !== 'solo_devolucion' && despacho.tiene_devolucion_envases && (
+        <Badge variant="outline">Con devolución</Badge>
+      )}
+      {despacho.alerta_credito_al_momento && <Badge variant="warning">Crédito</Badge>}
+    </div>
+  )
+}
 
 export function DespachosPage() {
   const [clienteId, setClienteId] = useState('todos')
@@ -82,19 +108,11 @@ export function DespachosPage() {
       />
       <div className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <Select value={clienteId} onValueChange={actualizarFiltro(setClienteId)}>
-            <SelectTrigger className="w-full sm:w-56">
-              <SelectValue placeholder="Cliente" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos los clientes</SelectItem>
-              {clientes?.map((cliente) => (
-                <SelectItem key={cliente.id} value={cliente.id}>
-                  {cliente.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ClienteComboboxFiltro
+            clientes={clientes ?? []}
+            value={clienteId}
+            onChange={actualizarFiltro(setClienteId)}
+          />
 
           <Select value={estado} onValueChange={actualizarFiltro(setEstado)}>
             <SelectTrigger className="w-full sm:w-40">
@@ -139,18 +157,29 @@ export function DespachosPage() {
           {despachos.map((despacho) => (
             <RecordCard
               key={despacho.id}
-              title={`#${despacho.numero} — ${despacho.cliente_nombre}`}
-              badge={
-                <div className="flex flex-col items-end gap-1">
-                  <Badge variant={despacho.estado === 'entregado' ? 'success' : 'destructive'}>
-                    {despacho.estado === 'entregado' ? 'Entregado' : 'Anulado'}
-                  </Badge>
-                  {despacho.alerta_credito_al_momento && <Badge variant="warning">Crédito</Badge>}
-                </div>
+              title={
+                despacho.tipo === 'solo_devolucion'
+                  ? `Devolución — ${despacho.cliente_nombre}`
+                  : `#${despacho.numero} — ${despacho.cliente_nombre}`
               }
+              badge={<BadgesDespacho despacho={despacho} />}
               fields={[
                 { label: 'Fecha', value: formatDate(despacho.fecha) },
                 { label: 'Total', value: formatCurrency(despacho.total) },
+                {
+                  label: 'Envases',
+                  value: despacho.cliente_tiene_envases ? (
+                    // Vista rápida: el cliente tiene ACTUALMENTE envases en su
+                    // poder — independiente de si este despacho puntual movió
+                    // envases o no.
+                    <Badge variant="outline" className="gap-1 px-1.5 py-0 font-normal">
+                      <Package className="size-3" />
+                      En poder
+                    </Badge>
+                  ) : (
+                    '—'
+                  ),
+                },
               ]}
               actions={
                 <DespachoDetalleDialog
