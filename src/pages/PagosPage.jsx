@@ -31,7 +31,7 @@ const ESTADOS = [
   { value: 'anulado', label: 'Anulado' },
 ]
 
-const POR_PAGINA = 20
+const POR_PAGINA = 8
 
 function BotonComprobante({ pago }) {
   const mutation = useMutation({

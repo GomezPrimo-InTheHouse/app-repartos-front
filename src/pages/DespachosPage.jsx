@@ -22,7 +22,7 @@ const ESTADOS = [
   { value: 'anulado', label: 'Anulado' },
 ]
 
-const POR_PAGINA = 20
+const POR_PAGINA = 8
 
 export function DespachosPage() {
   const [clienteId, setClienteId] = useState('todos')

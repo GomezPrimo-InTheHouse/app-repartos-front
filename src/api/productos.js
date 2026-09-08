@@ -17,12 +17,30 @@ function normalizarProducto(producto) {
   }
 }
 
+/**
+ * Listado de productos SIN paginar — devuelve el array directo.
+ * Usado en selectores (carrito de despacho, etc.) donde se necesitan todos
+ * los productos que matcheen el filtro, no una página puntual.
+ */
 export async function fetchProductos({ busqueda, activo, stockBajo } = {}) {
   const { data } = await apiClient.get('/productos', {
     params: { busqueda, activo, stockBajo },
   })
   const productos = data.productos ?? data
   return productos.map(normalizarProducto)
+}
+
+/**
+ * Listado de productos PAGINADO — devuelve { productos, total }.
+ * Usado en ProductosPage (el listado principal). Misma normalización de
+ * campos numéricos que fetchProductos.
+ */
+export async function fetchProductosPaginado({ busqueda, activo, stockBajo, limit, offset } = {}) {
+  const { data } = await apiClient.get('/productos', {
+    params: { busqueda, activo, stockBajo, limit, offset },
+  })
+  const productos = (data.productos ?? []).map(normalizarProducto)
+  return { productos, total: data.total }
 }
 
 export async function fetchProducto(id) {
