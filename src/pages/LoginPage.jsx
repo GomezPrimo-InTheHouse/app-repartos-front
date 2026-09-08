@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ export function LoginPage() {
   const { login, isLoggingIn, isAuthenticated, isLoadingSession } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [mostrarPassword, setMostrarPassword] = useState(false)
   const [error, setError] = useState(null)
 
   if (!isLoadingSession && isAuthenticated) {
@@ -68,15 +70,31 @@ export function LoginPage() {
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="password">Clave</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Tu clave"
-                />
+                {/* relative + pr-9 en el input: el ícono queda flotando
+                    adentro del campo, a la derecha, sin robarle ancho al
+                    resto del form. type="button" en el toggle evita que
+                    dispare el submit del form. */}
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={mostrarPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Tu clave"
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMostrarPassword((prev) => !prev)}
+                    tabIndex={-1}
+                    aria-label={mostrarPassword ? 'Ocultar clave' : 'Mostrar clave'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {mostrarPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
 
               {error && (
