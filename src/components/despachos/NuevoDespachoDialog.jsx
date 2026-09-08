@@ -9,7 +9,7 @@ import { fetchProductos } from '@/api/productos'
 import { FEATURE_DEVOLUCION_SIN_PRODUCTO } from '@/config/features'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DevolucionEnvasesSection } from '@/components/despachos/DevolucionEnvasesSection'
+import { DevolucionEnvasesSection } from './DevolucionEnvasesSection'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
