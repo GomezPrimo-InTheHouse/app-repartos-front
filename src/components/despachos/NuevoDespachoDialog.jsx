@@ -6,8 +6,10 @@ import { fetchClientes, fetchEnvasesCliente } from '@/api/clientes'
 import { getApiErrorMessage } from '@/api/client'
 import { crearDespacho } from '@/api/despachos'
 import { fetchProductos } from '@/api/productos'
+import { FEATURE_DEVOLUCION_SIN_PRODUCTO } from '@/config/features'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DevolucionEnvasesSection } from '@/components/despachos/DevolucionEnvasesSection'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
@@ -25,6 +27,10 @@ const estadoInicial = (clienteIdInicial) => ({
   cantidadParaAgregar: '1',
   envasesDevueltosParaAgregar: '0',
   items: [],
+  // Map { [producto_id]: string } — cantidades a devolver de productos que
+  // el cliente NO está comprando en este despacho. Solo se usa si
+  // FEATURE_DEVOLUCION_SIN_PRODUCTO está activo.
+  envasesDevueltosSueltos: {},
   notas: '',
 })
 
@@ -35,6 +41,9 @@ const estadoInicial = (clienteIdInicial) => ({
  *   clienteIdInicial fijo (el selector de cliente se oculta/bloquea), y
  *   onDespachoCreado(callback) para que el dialog que lo abrió pueda
  *   refrescar su propia lista al confirmar.
+ * - Despacho "solo devolución de envases" (sin productos), si
+ *   FEATURE_DEVOLUCION_SIN_PRODUCTO está activo — ver
+ *   DevolucionEnvasesSection.
  */
 export function NuevoDespachoDialog({
   trigger,
@@ -82,6 +91,19 @@ export function NuevoDespachoDialog({
     clienteConSaldo &&
     clienteConSaldo.limite_credito > 0 &&
     clienteConSaldo.saldo + totalCarrito > clienteConSaldo.limite_credito
+
+  // Productos con saldo de envases > 0 que el cliente NO está comprando en
+  // este despacho — son los únicos elegibles para "devolución suelta".
+  const envasesDisponiblesParaDevolucionSuelta = (envasesCliente ?? []).filter(
+    (e) => e.saldo > 0 && !estado.items.some((i) => i.producto_id === e.producto_id)
+  )
+
+  const envasesDevueltosSueltosPayload = Object.entries(estado.envasesDevueltosSueltos)
+    .map(([producto_id, cantidad]) => ({ producto_id, cantidad: Number(cantidad) }))
+    .filter((e) => e.cantidad > 0)
+
+  const hayDevolucionSuelta = envasesDevueltosSueltosPayload.length > 0
+  const esSoloDevolucion = estado.items.length === 0 && hayDevolucionSuelta
 
   function resetEstado() {
     setEstado(estadoInicial(clienteIdInicial))
@@ -135,17 +157,32 @@ export function NuevoDespachoDialog({
           },
         ]
 
-    setEstado((prev) => ({
-      ...prev,
-      items: nuevosItems,
-      productoIdParaAgregar: '',
-      cantidadParaAgregar: '1',
-      envasesDevueltosParaAgregar: '0',
-    }))
+    setEstado((prev) => {
+      // Si el producto recién agregado tenía una cantidad cargada en
+      // "devolución suelta", se descarta: a partir de ahora ese envase se
+      // maneja vía el campo del item, no acá (evita contar dos veces el
+      // mismo envase devuelto).
+      const { [producto.id]: _descartado, ...envasesDevueltosSueltosRestantes } = prev.envasesDevueltosSueltos
+      return {
+        ...prev,
+        items: nuevosItems,
+        productoIdParaAgregar: '',
+        cantidadParaAgregar: '1',
+        envasesDevueltosParaAgregar: '0',
+        envasesDevueltosSueltos: envasesDevueltosSueltosRestantes,
+      }
+    })
   }
 
   function handleQuitarItem(productoId) {
     setEstado((prev) => ({ ...prev, items: prev.items.filter((i) => i.producto_id !== productoId) }))
+  }
+
+  function handleCambiarEnvaseSuelto(productoId, valor) {
+    setEstado((prev) => ({
+      ...prev,
+      envasesDevueltosSueltos: { ...prev.envasesDevueltosSueltos, [productoId]: valor },
+    }))
   }
 
   const mutation = useMutation({
@@ -157,10 +194,17 @@ export function NuevoDespachoDialog({
           cantidad: i.cantidad,
           ...(i.maneja_envase ? { envases_devueltos: i.envases_devueltos ?? 0 } : {}),
         })),
+        ...(FEATURE_DEVOLUCION_SIN_PRODUCTO && hayDevolucionSuelta
+          ? { envases_devueltos_sueltos: envasesDevueltosSueltosPayload }
+          : {}),
         notas: estado.notas || undefined,
       }),
     onSuccess: (despacho) => {
-      toast.success(`Despacho #${despacho.numero} creado`)
+      toast.success(
+        despacho.tipo === 'solo_devolucion'
+          ? 'Devolución de envases registrada'
+          : `Despacho #${despacho.numero} creado`
+      )
       if (despacho.alerta_credito_al_momento) {
         toast.warning(`${clienteSeleccionado?.nombre ?? 'El cliente'} superó su límite de crédito`)
       }
@@ -181,8 +225,16 @@ export function NuevoDespachoDialog({
       toast.error('Elegí un cliente')
       return
     }
-    if (estado.items.length === 0) {
-      toast.error('Agregá al menos un producto')
+    if (estado.items.length === 0 && !(FEATURE_DEVOLUCION_SIN_PRODUCTO && hayDevolucionSuelta)) {
+      toast.error('Agregá al menos un producto o una devolución de envases')
+      return
+    }
+    const excedeSaldo = envasesDevueltosSueltosPayload.some((e) => {
+      const disponible = envasesDisponiblesParaDevolucionSuelta.find((d) => d.producto_id === e.producto_id)
+      return disponible && e.cantidad > disponible.saldo
+    })
+    if (excedeSaldo) {
+      toast.error('Hay una cantidad de envases a devolver mayor a la que tiene el cliente')
       return
     }
     mutation.mutate()
@@ -237,6 +289,14 @@ export function NuevoDespachoDialog({
                 </div>
               ))}
             </div>
+          )}
+
+          {FEATURE_DEVOLUCION_SIN_PRODUCTO && estado.clienteId && (
+            <DevolucionEnvasesSection
+              envasesDisponibles={envasesDisponiblesParaDevolucionSuelta}
+              valores={estado.envasesDevueltosSueltos}
+              onChange={handleCambiarEnvaseSuelto}
+            />
           )}
 
           <div className="flex flex-col gap-2 rounded-md border border-border p-3">
@@ -320,7 +380,9 @@ export function NuevoDespachoDialog({
               Cancelar
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Creando…' : 'Crear despacho'}
+              {mutation.isPending
+                ? (esSoloDevolucion ? 'Registrando…' : 'Creando…')
+                : (esSoloDevolucion ? 'Registrar devolución' : 'Crear despacho')}
             </Button>
           </DialogFooter>
         </form>
