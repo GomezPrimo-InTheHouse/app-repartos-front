@@ -67,6 +67,7 @@ function ClienteFila({ ejecucionId, item }) {
         onOpenChange={setDespachoDialogOpen}
         clienteIdInicial={item.cliente_id}
         clienteNombreInicial={item.cliente_nombre}
+        clienteAumentoInicial={item.porcentaje_aumento}
       />
     </div>
   )

@@ -34,13 +34,23 @@ const estadoInicial = (clienteIdInicial) => ({
   notas: '',
 })
 
+// Preview local del precio con el % de aumento del cliente. El backend
+// vuelve a resolver esto de forma autoritativa al crear el despacho — esto
+// es solo para que el carrito y la alerta de crédito no muestren un total
+// distinto al que realmente se va a cobrar.
+function calcularPrecioConAumento(precioBase, porcentajeAumento) {
+  return Number(precioBase) * (1 + Number(porcentajeAumento || 0) / 100)
+}
+
 /**
  * Nuevo despacho. Soporta:
  * - Uso normal: trigger propio, cliente elegible libremente.
  * - Uso desde "Reparto de hoy" (Despachos): open/onOpenChange controlados,
  *   clienteIdInicial fijo (el selector de cliente se oculta/bloquea), y
  *   onDespachoCreado(callback) para que el dialog que lo abrió pueda
- *   refrescar su propia lista al confirmar.
+ *   refrescar su propia lista al confirmar. En este modo el padre también
+ *   debe pasar clienteAumentoInicial (el porcentaje_aumento del cliente),
+ *   porque acá adentro no se trae la lista completa de clientes.
  * - Despacho "solo devolución de envases" (sin productos), si
  *   FEATURE_DEVOLUCION_SIN_PRODUCTO está activo — ver
  *   DevolucionEnvasesSection.
@@ -51,6 +61,7 @@ export function NuevoDespachoDialog({
   onOpenChange: onOpenChangeControlado,
   clienteIdInicial,
   clienteNombreInicial,
+  clienteAumentoInicial,
   onDespachoCreado,
 }) {
   const [openInterno, setOpenInterno] = useState(false)
@@ -81,8 +92,9 @@ export function NuevoDespachoDialog({
   })
 
   const clienteSeleccionado = clienteFijo
-    ? { id: clienteIdInicial, nombre: clienteNombreInicial }
+    ? { id: clienteIdInicial, nombre: clienteNombreInicial, porcentaje_aumento: clienteAumentoInicial ?? 0 }
     : clientes?.find((c) => c.id === estado.clienteId)
+  const porcentajeAumento = Number(clienteSeleccionado?.porcentaje_aumento ?? 0)
   const productoParaAgregar = productos?.find((p) => p.id === estado.productoIdParaAgregar)
   const totalCarrito = estado.items.reduce((acc, item) => acc + item.subtotal, 0)
 
@@ -132,6 +144,8 @@ export function NuevoDespachoDialog({
       return
     }
 
+    const precioAplicado = calcularPrecioConAumento(producto.precio_venta, porcentajeAumento)
+
     const itemExistente = estado.items.find((i) => i.producto_id === producto.id)
     const nuevosItems = itemExistente
       ? estado.items.map((i) =>
@@ -140,7 +154,7 @@ export function NuevoDespachoDialog({
                 ...i,
                 cantidad: i.cantidad + cantidad,
                 envases_devueltos: (i.envases_devueltos ?? 0) + envasesDevueltos,
-                subtotal: (i.cantidad + cantidad) * producto.precio_venta,
+                subtotal: (i.cantidad + cantidad) * i.precio_aplicado,
               }
             : i
         )
@@ -150,10 +164,11 @@ export function NuevoDespachoDialog({
             producto_id: producto.id,
             nombre: producto.nombre,
             precio_venta: producto.precio_venta,
+            precio_aplicado: precioAplicado,
             maneja_envase: producto.maneja_envase,
             cantidad,
             envases_devueltos: producto.maneja_envase ? envasesDevueltos : undefined,
-            subtotal: cantidad * producto.precio_venta,
+            subtotal: cantidad * precioAplicado,
           },
         ]
 
@@ -273,6 +288,12 @@ export function NuevoDespachoDialog({
             </div>
           )}
 
+          {porcentajeAumento > 0 && (
+            <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Este cliente tiene un {porcentajeAumento}% de aumento — los precios de abajo ya lo incluyen.
+            </div>
+          )}
+
           {alertaCreditoPreview && (
             <div className="rounded-md bg-warning-soft px-3 py-2 text-sm text-foreground">
               ⚠ Este despacho va a superar el límite de crédito de {clienteSeleccionado.nombre}.
@@ -312,7 +333,7 @@ export function NuevoDespachoDialog({
                 <SelectContent>
                   {productos?.map((producto) => (
                     <SelectItem key={producto.id} value={producto.id}>
-                      {producto.nombre} — {formatCurrency(producto.precio_venta)}
+                      {producto.nombre} — {formatCurrency(calcularPrecioConAumento(producto.precio_venta, porcentajeAumento))}
                     </SelectItem>
                   ))}
                 </SelectContent>
