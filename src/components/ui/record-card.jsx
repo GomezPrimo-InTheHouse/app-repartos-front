@@ -40,7 +40,7 @@ export function RecordCard({ title, badge, fields = [], actions, className }) {
       )}
 
       {actions && (
-        <CardFooter className="mt-auto flex justify-end gap-1.5  px-3 pb-3 pt-3">
+        <CardFooter className="mt-auto flex justify-end gap-1.5 border-t border-border px-3 pb-1 pt-3">
           {actions}
         </CardFooter>
       )}
@@ -49,10 +49,23 @@ export function RecordCard({ title, badge, fields = [], actions, className }) {
 }
 
 function RecordCardField({ label, value }) {
+  // El truncate solo tiene sentido para texto plano (nombres largos,
+  // direcciones, etc.). Si el value es un elemento React (por ejemplo un
+  // <Badge>), truncate le recorta el ancho de forma rara ya que no hay
+  // texto qué elidir — se lo dejamos crecer libremente en ese caso.
+  const esTextoPlano = typeof value === 'string' || typeof value === 'number'
+
   return (
     <div className="flex flex-col gap-0">
       <span className="text-[11px] leading-tight text-muted-foreground">{label}</span>
-      <span className="truncate text-xs font-medium leading-tight text-foreground">{value ?? '—'}</span>
+      <span
+        className={cn(
+          'text-xs font-medium leading-tight text-foreground',
+          esTextoPlano && 'truncate'
+        )}
+      >
+        {value ?? '—'}
+      </span>
     </div>
   )
 }
