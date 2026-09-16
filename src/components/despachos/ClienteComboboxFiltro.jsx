@@ -19,8 +19,19 @@ import { cn } from '@/lib/utils'
  * - value: id del cliente seleccionado, o 'todos' para "sin filtro".
  * - onChange: (id) => void
  * - placeholder: texto del input cuando no hay selección.
+ * - mostrarOpcionTodos: si es false, oculta la opción "Todos los clientes"
+ *   y el botón de limpiar — para usos donde siempre hace falta un cliente
+ *   puntual (ej. cargar un despacho), no un filtro opcional.
+ * - disabled: bloquea el input por completo (no abre el dropdown).
  */
-export function ClienteComboboxFiltro({ clientes = [], value, onChange, placeholder = 'Todos los clientes' }) {
+export function ClienteComboboxFiltro({
+  clientes = [],
+  value,
+  onChange,
+  placeholder = 'Todos los clientes',
+  mostrarOpcionTodos = true,
+  disabled = false,
+}) {
   const [open, setOpen] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [indiceActivo, setIndiceActivo] = useState(0)
@@ -50,6 +61,7 @@ export function ClienteComboboxFiltro({ clientes = [], value, onChange, placehol
   }, [open])
 
   function handleAbrir() {
+    if (disabled) return
     setOpen(true)
     setBusqueda('')
     setIndiceActivo(0)
@@ -69,6 +81,7 @@ export function ClienteComboboxFiltro({ clientes = [], value, onChange, placehol
   }
 
   function handleKeyDown(event) {
+    if (disabled) return
     if (!open) {
       if (event.key === 'ArrowDown' || event.key === 'Enter') {
         event.preventDefault()
@@ -108,9 +121,10 @@ export function ClienteComboboxFiltro({ clientes = [], value, onChange, placehol
           className="pr-14"
           role="combobox"
           aria-expanded={open}
+          disabled={disabled}
         />
         <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
-          {clienteSeleccionado && !open && (
+          {mostrarOpcionTodos && clienteSeleccionado && !open && (
             <button
               type="button"
               onClick={handleLimpiar}
@@ -124,19 +138,21 @@ export function ClienteComboboxFiltro({ clientes = [], value, onChange, placehol
         </div>
       </div>
 
-      {open && (
+      {open && !disabled && (
         <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md">
-          <button
-            type="button"
-            onClick={() => handleSeleccionar('todos')}
-            className={cn(
-              'flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent',
-              value === 'todos' && 'font-medium'
-            )}
-          >
-            Todos los clientes
-            {value === 'todos' && <Check className="size-4" />}
-          </button>
+          {mostrarOpcionTodos && (
+            <button
+              type="button"
+              onClick={() => handleSeleccionar('todos')}
+              className={cn(
+                'flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent',
+                value === 'todos' && 'font-medium'
+              )}
+            >
+              Todos los clientes
+              {value === 'todos' && <Check className="size-4" />}
+            </button>
+          )}
 
           {opciones.length === 0 && (
             <p className="px-3 py-2 text-sm text-muted-foreground">Sin resultados.</p>
