@@ -242,6 +242,7 @@ export function NuevoDespachoDialog({
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
       queryClient.invalidateQueries({ queryKey: ['repartos', 'hoy'] })
       onDespachoCreado?.(despacho)
+      resetEstado()
       setOpen(false)
     },
     onError: (error) => {
