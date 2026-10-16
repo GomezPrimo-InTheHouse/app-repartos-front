@@ -1,5 +1,5 @@
 import {
-  Building2, FileBarChart, LayoutDashboard, Navigation, Package, Truck, UserCog, Users, Wallet,
+  Building2, Factory, FileBarChart, LayoutDashboard, Navigation, Package, Truck, UserCog, Users, Wallet,
 } from 'lucide-react'
 
 const operativoPrimary = [
@@ -13,6 +13,8 @@ const operativoSecondary = [
   { to: '/productos', label: 'Productos', icon: Package, permiso: 'productos' },
   { to: '/reportes', label: 'Reportes', icon: FileBarChart, permiso: 'reportes' },
   { to: '/reparto', label: 'Reparto', icon: Navigation, permiso: 'reparto' },
+  // Solo aparece si la empresa tiene Producción activa (lo resuelve tienePermiso en AuthContext)
+  { to: '/produccion', label: 'Producción', icon: Factory, permiso: 'produccion' },
 ]
 
 const miEquipoItem = { to: '/empleados', label: 'Mi equipo', icon: UserCog, permiso: null }

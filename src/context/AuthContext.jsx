@@ -6,6 +6,12 @@ import { AuthContext } from './auth-context'
 
 const ME_QUERY_KEY = ['auth', 'me']
 
+// Módulos que solo existen si la empresa tiene el flag activo (lo setea el super_admin en Empresas).
+// Si el flag está apagado, el módulo no existe para nadie: ni admin ni vendedor.
+const MODULOS_CON_FLAG = {
+  produccion: 'usaProduccion',
+}
+
 export function AuthProvider({ children }) {
   const queryClient = useQueryClient()
 
@@ -57,6 +63,8 @@ export function AuthProvider({ children }) {
   // array de permisos (el sistema de permisos es exclusivo para vendedor).
   // tienePermiso() es la función que nav-items.js usa para filtrar el menú.
   function tienePermiso(clave) {
+    const flag = MODULOS_CON_FLAG[clave]
+    if (flag && !user?.[flag]) return false
     if (isAdmin || isSuperAdmin) return true
     return user?.permisos?.includes(clave) ?? false
   }
@@ -71,6 +79,7 @@ export function AuthProvider({ children }) {
     isSuperAdmin,
     isAdmin,
     isVendedor: rol === 'vendedor',
+    usaProduccion: Boolean(user?.usaProduccion),
     tienePermiso,
     login: loginMutation.mutateAsync,
     isLoggingIn: loginMutation.isPending,

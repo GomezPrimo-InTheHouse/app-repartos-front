@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { fetchProductos } from '@/api/productos'
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { useState } from 'react'
+import { fetchProductosPaginado } from '@/api/productos'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,9 +12,12 @@ import { RecordCard } from '@/components/ui/record-card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { useAuth } from '@/hooks/useAuth'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
+
+const POR_PAGINA = 8
 
 const FILTROS = [
   { value: 'activos', label: 'Activos', activo: true },
@@ -22,44 +25,58 @@ const FILTROS = [
   { value: 'todos', label: 'Todos', activo: undefined },
 ]
 
-// Orden "Stock (menor a mayor)" se saca por ahora: el sistema no controla
-// stock en los despachos, así que ordenar por un número que nunca cambia
-// no aporta nada (ver addendum "Eliminación del control de stock").
+// El orden lo resuelve el backend (productos.service acepta nombre | precio_venta | stock_actual),
+// así funciona bien con la paginación. Los de stock solo se ofrecen si la empresa usa Producción.
 const ORDENES = [
-  { value: 'nombre-asc', label: 'Nombre (A-Z)' },
-  { value: 'nombre-desc', label: 'Nombre (Z-A)' },
-  { value: 'precio-desc', label: 'Precio (mayor a menor)' },
-  { value: 'precio-asc', label: 'Precio (menor a mayor)' },
+  { value: 'nombre-asc', label: 'Nombre (A-Z)', ordenarPor: 'nombre', orden: 'asc' },
+  { value: 'nombre-desc', label: 'Nombre (Z-A)', ordenarPor: 'nombre', orden: 'desc' },
+  { value: 'precio-desc', label: 'Precio (mayor a menor)', ordenarPor: 'precio_venta', orden: 'desc' },
+  { value: 'precio-asc', label: 'Precio (menor a mayor)', ordenarPor: 'precio_venta', orden: 'asc' },
+  { value: 'stock-asc', label: 'Stock (menor a mayor)', ordenarPor: 'stock_actual', orden: 'asc', soloProduccion: true },
 ]
 
-function ordenarProductos(productos, orden) {
-  if (!productos) return productos
-  const copia = [...productos]
-  switch (orden) {
-    case 'nombre-desc':
-      return copia.sort((a, b) => b.nombre.localeCompare(a.nombre))
-    case 'precio-desc':
-      return copia.sort((a, b) => b.precio_venta - a.precio_venta)
-    case 'precio-asc':
-      return copia.sort((a, b) => a.precio_venta - b.precio_venta)
-    default:
-      return copia.sort((a, b) => a.nombre.localeCompare(b.nombre))
-  }
-}
-
 export function ProductosPage() {
+  const { usaProduccion } = useAuth()
   const [busquedaInput, setBusquedaInput] = useState('')
   const [filtro, setFiltro] = useState('activos')
   const [orden, setOrden] = useState('nombre-asc')
+  const [pagina, setPagina] = useState(0)
   const busqueda = useDebouncedValue(busquedaInput)
   const activo = FILTROS.find((f) => f.value === filtro)?.activo
+  const ordenesDisponibles = ORDENES.filter((o) => !o.soloProduccion || usaProduccion)
+  const ordenElegido = ordenesDisponibles.find((o) => o.value === orden) ?? ordenesDisponibles[0]
 
-  const { data: productos, isLoading, isError } = useQuery({
-    queryKey: ['productos', { busqueda, activo }],
-    queryFn: () => fetchProductos({ busqueda: busqueda || undefined, activo }),
+  // Si cambia la búsqueda (debounced), se vuelve a la primera página
+  const [busquedaAnterior, setBusquedaAnterior] = useState(busqueda)
+  if (busqueda !== busquedaAnterior) {
+    setBusquedaAnterior(busqueda)
+    setPagina(0)
+  }
+
+  const params = {
+    busqueda: busqueda || undefined,
+    activo,
+    ordenarPor: ordenElegido.ordenarPor,
+    orden: ordenElegido.orden,
+    limit: POR_PAGINA,
+    offset: pagina * POR_PAGINA,
+  }
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['productos', 'paginado', params],
+    queryFn: () => fetchProductosPaginado(params),
   })
 
-  const productosOrdenados = useMemo(() => ordenarProductos(productos, orden), [productos, orden])
+  const productos = data?.productos ?? []
+  const total = data?.total ?? 0
+  const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA))
+
+  function actualizarFiltro(setter) {
+    return (value) => {
+      setter(value)
+      setPagina(0)
+    }
+  }
 
   return (
     <>
@@ -80,19 +97,19 @@ export function ProductosPage() {
             <div className="flex gap-1 rounded-md border border-border p-1">
               {FILTROS.map((f) => (
                 <Button key={f.value} type="button" size="sm" variant="ghost"
-                  onClick={() => setFiltro(f.value)}
+                  onClick={() => actualizarFiltro(setFiltro)(f.value)}
                   className={cn('flex-1', filtro === f.value && 'bg-secondary text-secondary-foreground')}>
                   {f.label}
                 </Button>
               ))}
             </div>
 
-            <Select value={orden} onValueChange={setOrden}>
+            <Select value={ordenElegido.value} onValueChange={actualizarFiltro(setOrden)}>
               <SelectTrigger className="w-full sm:w-56">
                 <SelectValue placeholder="Ordenar por…" />
               </SelectTrigger>
               <SelectContent>
-                {ORDENES.map((o) => (
+                {ordenesDisponibles.map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -108,38 +125,74 @@ export function ProductosPage() {
             No se pudo cargar el catálogo de productos.
           </p>
         )}
-        {productosOrdenados?.length === 0 && (
+        {!isLoading && !isError && productos.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {busqueda ? 'No hay productos que coincidan con la búsqueda.' : 'No hay productos cargados.'}
           </p>
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {productosOrdenados?.map((producto) => (
-            <RecordCard
-              key={producto.id}
-              title={producto.nombre}
-              badge={
-                <Badge variant={producto.activo ? 'success' : 'destructive'}>
-                  {producto.activo ? 'Activo' : 'Inactivo'}
-                </Badge>
-              }
-              fields={[
-                { label: 'Precio de venta', value: formatCurrency(producto.precio_venta) },
-                { label: 'Costo unitario', value: formatCurrency(producto.costo_unitario) },
-                { label: 'Categoría', value: producto.categoria },
-              ]}
-              actions={
-                <>
-                  <ProductoDetalleDialog producto={producto}
-                    trigger={<Button variant="outline" size="sm">Ver</Button>} />
-                  <ProductoFormSheet producto={producto}
-                    trigger={<Button variant="outline" size="sm">Editar</Button>} />
-                </>
-              }
-            />
-          ))}
+          {productos.map((producto) => {
+            const stockBajo =
+              usaProduccion && producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
+            return (
+              <RecordCard
+                key={producto.id}
+                title={producto.nombre}
+                badge={
+                  <Badge variant={producto.activo ? 'success' : 'destructive'}>
+                    {producto.activo ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                }
+                fields={[
+                  { label: 'Precio de venta', value: formatCurrency(producto.precio_venta) },
+                  { label: 'Costo unitario', value: formatCurrency(producto.costo_unitario) },
+                  usaProduccion
+                    ? {
+                        label: 'Stock',
+                        value: (
+                          <span className={cn('font-mono-num', stockBajo && 'text-destructive')}>
+                            {producto.stock_actual.toLocaleString('es-AR')}
+                          </span>
+                        ),
+                      }
+                    : { label: 'Categoría', value: producto.categoria },
+                ]}
+                actions={
+                  <>
+                    <ProductoDetalleDialog producto={producto}
+                      trigger={<Button variant="outline" size="sm">Ver</Button>} />
+                    <ProductoFormSheet producto={producto}
+                      trigger={<Button variant="outline" size="sm">Editar</Button>} />
+                  </>
+                }
+              />
+            )
+          })}
         </div>
+
+        {total > 0 && (
+          <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Mostrando {productos.length} de {total}
+            </p>
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
+              <Button type="button" variant="outline" size="sm" disabled={pagina === 0}
+                onClick={() => setPagina((p) => p - 1)}>
+                <ChevronLeft className="size-4" />
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Página {pagina + 1} de {totalPaginas}
+              </span>
+              <Button type="button" variant="outline" size="sm" disabled={pagina + 1 >= totalPaginas}
+                onClick={() => setPagina((p) => p + 1)}>
+                Siguiente
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )
