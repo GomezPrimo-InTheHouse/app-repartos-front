@@ -146,18 +146,23 @@ export function ListaFormDialog({ lista, trigger, open: openControlado, onOpenCh
 
       const clienteIdsActuales = new Set(form.clientesSeleccionados.map((c) => c.clienteId))
       const aEliminar = (lista.items ?? []).filter((original) => !clienteIdsActuales.has(original.cliente_id))
-      const aAgregar = form.clientesSeleccionados.filter((c) => !c.itemId)
+      // El orden de cada cliente nuevo es su posición en la lista completa, no entre los nuevos
+      const aAgregar = form.clientesSeleccionados
+        .map((c, posicion) => ({ ...c, posicion }))
+        .filter((c) => !c.itemId)
 
       await Promise.all([
         ...aEliminar.map((original) => eliminarItemLista({ listaId: lista.id, itemId: original.id })),
-        ...aAgregar.map((c, index) =>
-          agregarItemLista({ listaId: lista.id, clienteId: c.clienteId, orden: index })
+        ...aAgregar.map((c) =>
+          agregarItemLista({ listaId: lista.id, clienteId: c.clienteId, orden: c.posicion })
         ),
       ])
     },
     onSuccess: () => {
       toast.success(esEdicion ? 'Lista actualizada' : 'Lista creada')
       queryClient.invalidateQueries({ queryKey: ['repartos', 'listas'] })
+      // El reparto del día se arma con las listas: refrescarlo para que tome los cambios
+      queryClient.invalidateQueries({ queryKey: ['repartos', 'hoy'] })
       setOpen(false)
     },
     onError: (error) => {

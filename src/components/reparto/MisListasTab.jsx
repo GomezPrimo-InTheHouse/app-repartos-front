@@ -35,6 +35,7 @@ export function MisListasTab() {
     onSuccess: () => {
       toast.success('Lista eliminada')
       queryClient.invalidateQueries({ queryKey: ['repartos', 'listas'] })
+      queryClient.invalidateQueries({ queryKey: ['repartos', 'hoy'] })
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'No se pudo eliminar la lista'))
