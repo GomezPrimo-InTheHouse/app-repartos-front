@@ -18,6 +18,17 @@ export async function guardarUbicacionCliente({ clienteId, latitud, longitud, or
   return data.cliente
 }
 
+/**
+ * Busca una dirección (Nominatim vía el back). Sin localidad, el back usa la más común entre los
+ * clientes de la empresa. Devuelve { localidad, resultados: [{ latitud, longitud, etiqueta, exacta }] }.
+ */
+export async function buscarDireccion({ direccion, localidad }) {
+  const { data } = await apiClient.get('/geolocalizacion/buscar-direccion', {
+    params: { direccion, localidad: localidad || undefined },
+  })
+  return data
+}
+
 /** Envía la posición actual del usuario logueado (se guarda solo la última). */
 export async function enviarMiUbicacion({ latitud, longitud, precision }) {
   await apiClient.post('/geolocalizacion/mi-ubicacion', { latitud, longitud, precision })
