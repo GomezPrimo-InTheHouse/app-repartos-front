@@ -7,9 +7,18 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { formatDocumento } from '@/lib/documento'
+import { etiquetaModulo, ordenarModulos, resumenCambiosModulos } from '@/lib/modulos'
+import { ModulosEmpresaField } from './ModulosEmpresaField'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 
 const PASSWORD_MIN = 6
+
+// Mismo criterio que el back: DNI de 7-8 dígitos o CUIT/CUIL de 11 (el dígito verificador lo valida el back).
+function documentoConFormatoValido(valor) {
+  const digitos = valor.replace(/\D/g, '')
+  return [7, 8, 11].includes(digitos.length)
+}
 
 const camposIniciales = {
   nombre_negocio: '',
@@ -17,7 +26,7 @@ const camposIniciales = {
   telefono: '',
   email_contacto: '',
   direccion: '',
-  usa_produccion: false,
+  modulos: [],
   admin_nombre: '',
   admin_email: '',
   admin_password: '',
@@ -28,18 +37,37 @@ function formDesdeEmpresa(empresa) {
   return {
     ...camposIniciales,
     nombre_negocio: empresa.nombre_negocio ?? '',
-    cuit: empresa.cuit ?? '',
+    cuit: formatDocumento(empresa.cuit) ?? '',
     telefono: empresa.telefono ?? '',
     email_contacto: empresa.email_contacto ?? '',
     direccion: empresa.direccion ?? '',
+    modulos: ordenarModulos(empresa.modulos ?? []),
   }
+}
+
+// Texto del diálogo de confirmación al editar: qué cambia en los módulos y qué efectos tiene.
+function DescripcionCambios({ empresa, modulos }) {
+  const { activados, desactivados, avisos, hayCambios } = resumenCambiosModulos(
+    ordenarModulos(empresa.modulos ?? []),
+    modulos
+  )
+  if (!hayCambios) return `Se van a actualizar los datos de ${empresa.nombre_negocio}.`
+  return (
+    <span className="flex flex-col gap-1.5">
+      <span>Se van a actualizar los datos de {empresa.nombre_negocio}.</span>
+      {activados.length > 0 && <span><strong>Se activan:</strong> {activados.map(etiquetaModulo).join(', ')}.</span>}
+      {desactivados.length > 0 && <span><strong>Se desactivan:</strong> {desactivados.map(etiquetaModulo).join(', ')}.</span>}
+      {avisos.map((aviso) => <span key={aviso}>• {aviso}</span>)}
+      {desactivados.length > 0 && <span>Desactivar un módulo no borra datos: si se reactiva, todo vuelve a estar.</span>}
+    </span>
+  )
 }
 
 /**
  * Alta y edición de empresas (solo super admin).
  * - Alta: datos de la empresa + su primer administrador, que se crean juntos (todo o nada).
- * - Edición: solo los datos de la empresa. Los usuarios se gestionan desde "Mi equipo"
- *   de la propia empresa, y el módulo Producción desde la tarjeta.
+ * - Edición: datos y módulos contratados. Los usuarios se gestionan desde "Mi equipo"
+ *   de la propia empresa (si lo tiene contratado).
  */
 export function EmpresaFormSheet({ empresa, trigger }) {
   const esEdicion = Boolean(empresa)
@@ -59,17 +87,18 @@ export function EmpresaFormSheet({ empresa, trigger }) {
 
   const datosEmpresa = () => ({
     nombre_negocio: form.nombre_negocio.trim(),
-    cuit: form.cuit.trim() || null,
+    cuit: form.cuit.replace(/\D/g, ''),
     telefono: form.telefono.trim() || null,
     email_contacto: form.email_contacto.trim() || null,
     direccion: form.direccion.trim() || null,
+    modulos: ordenarModulos(form.modulos),
   })
 
   const mutation = useMutation({
     mutationFn: () => {
       if (esEdicion) return actualizarPropietario({ id: empresa.id, ...datosEmpresa() })
       return crearPropietario({
-        empresa: { ...datosEmpresa(), usa_produccion: form.usa_produccion },
+        empresa: datosEmpresa(),
         admin: {
           nombreCompleto: form.admin_nombre.trim(),
           email: form.admin_email.trim(),
@@ -96,6 +125,10 @@ export function EmpresaFormSheet({ empresa, trigger }) {
     event.preventDefault()
     if (!form.nombre_negocio.trim()) {
       toast.error('El nombre del negocio es obligatorio')
+      return
+    }
+    if (!documentoConFormatoValido(form.cuit)) {
+      toast.error('Ingresá un DNI (7 u 8 dígitos) o un CUIT/CUIL (11 dígitos)')
       return
     }
     if (!esEdicion && form.admin_password.trim().length < PASSWORD_MIN) {
@@ -131,17 +164,19 @@ export function EmpresaFormSheet({ empresa, trigger }) {
               onChange={(e) => updateField('nombre_negocio', e.target.value)} placeholder="Ej: Sodería Los Primos" />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="emp-cuit">CUIT</Label>
-              <Input id="emp-cuit" inputMode="numeric" value={form.cuit}
-                onChange={(e) => updateField('cuit', e.target.value)} placeholder="Opcional" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="emp-telefono">Teléfono</Label>
-              <Input id="emp-telefono" type="tel" value={form.telefono}
-                onChange={(e) => updateField('telefono', e.target.value)} placeholder="Opcional" />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="emp-cuit">CUIT, CUIL o DNI del titular</Label>
+            <Input id="emp-cuit" required inputMode="numeric" value={form.cuit}
+              onChange={(e) => updateField('cuit', e.target.value)} placeholder="Ej: 20-30123456-7 o 30123456" />
+            <p className="text-xs text-muted-foreground">
+              Identifica a la empresa: no puede repetirse. Con o sin guiones y puntos.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="emp-telefono">Teléfono</Label>
+            <Input id="emp-telefono" type="tel" value={form.telefono}
+              onChange={(e) => updateField('telefono', e.target.value)} placeholder="Opcional" />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -156,21 +191,10 @@ export function EmpresaFormSheet({ empresa, trigger }) {
               onChange={(e) => updateField('direccion', e.target.value)} placeholder="Opcional" />
           </div>
 
+          <ModulosEmpresaField value={form.modulos} onChange={(modulos) => updateField('modulos', modulos)} />
+
           {!esEdicion && (
             <>
-              <div className="flex items-start gap-2">
-                <input
-                  id="emp-produccion"
-                  type="checkbox"
-                  checked={form.usa_produccion}
-                  onChange={(e) => updateField('usa_produccion', e.target.checked)}
-                  className="mt-0.5 size-4 rounded border-border"
-                />
-                <Label htmlFor="emp-produccion" className="cursor-pointer font-normal leading-snug">
-                  Activar módulo Producción (control de stock). Se puede cambiar después.
-                </Label>
-              </div>
-
               <p className="mt-2 border-t border-border pt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Administrador de la empresa
               </p>
@@ -208,7 +232,7 @@ export function EmpresaFormSheet({ empresa, trigger }) {
           open={confirmOpen}
           onOpenChange={setConfirmOpen}
           title="¿Guardar los cambios?"
-          description={`Se van a actualizar los datos de ${empresa.nombre_negocio}.`}
+          description={<DescripcionCambios empresa={empresa} modulos={ordenarModulos(form.modulos)} />}
           confirmLabel="Guardar cambios"
           confirmingLabel="Guardando…"
           isPending={mutation.isPending}

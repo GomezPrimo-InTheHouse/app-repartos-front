@@ -1,5 +1,5 @@
 import {
-  Building2, Factory, FileBarChart, LayoutDashboard, Navigation, Package, Truck, UserCog, Users, Wallet,
+  Building2, Factory, FileBarChart, LayoutDashboard, MapPinned, Navigation, Package, Truck, UserCog, Users, Wallet,
 } from 'lucide-react'
 
 const operativoPrimary = [
@@ -15,9 +15,12 @@ const operativoSecondary = [
   { to: '/reparto', label: 'Reparto', icon: Navigation, permiso: 'reparto' },
   // Solo aparece si la empresa tiene Producción activa (lo resuelve tienePermiso en AuthContext)
   { to: '/produccion', label: 'Producción', icon: Factory, permiso: 'produccion' },
+  // Solo aparece si la empresa tiene Geolocalización activa
+  { to: '/geolocalizacion', label: 'Mapa', icon: MapPinned, permiso: 'geolocalizacion' },
 ]
 
-const miEquipoItem = { to: '/empleados', label: 'Mi equipo', icon: UserCog, permiso: null }
+// "equipo" es un módulo contratable: sin él, la empresa opera solo con su administrador.
+const miEquipoItem = { to: '/empleados', label: 'Mi equipo', icon: UserCog, permiso: 'equipo' }
 
 const superAdminPrimary = [
   { to: '/admin', label: 'Usuarios', icon: UserCog, end: true, permiso: null },
