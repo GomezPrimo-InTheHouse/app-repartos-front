@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { MapPin, Navigation } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronLeft, ChevronRight, MapPin, Navigation } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { Marker, Polyline, Popup } from 'react-leaflet'
 import { fetchClientesGeo } from '@/api/geolocalizacion'
 import { NuevoDespachoDialog } from '@/components/despachos/NuevoDespachoDialog'
@@ -16,6 +16,7 @@ import { AjustarVista, Mapa } from './MapaBase'
 import { UbicarClienteDialog } from './UbicarClienteDialog'
 
 const TODOS = 'todos'
+const SIN_UBICAR_POR_PAGINA = 25
 
 const DIAS_CORTOS = { lunes: 'Lu', martes: 'Ma', miercoles: 'Mi', jueves: 'Ju', viernes: 'Vi', sabado: 'Sá', domingo: 'Do' }
 
@@ -31,6 +32,8 @@ export function MapaClientesTab() {
   const [listaId, setListaId] = useState(TODOS)
   const [aUbicar, setAUbicar] = useState(null)
   const [aDespachar, setADespachar] = useState(null)
+  const [paginaSinUbicar, setPaginaSinUbicar] = useState(0)
+  const tituloSinUbicarRef = useRef(null)
 
   const conLista = listaId !== TODOS
   const { data, isLoading, isError } = useQuery({
@@ -47,10 +50,27 @@ export function MapaClientesTab() {
   const numeroDe = (c) => (conLista ? clientes.indexOf(c) + 1 : null)
   const puedeDespachar = tienePermiso('despachos')
 
+  // Paginación local de "Clientes sin ubicar" (los datos ya vienen completos para el mapa).
+  // Al ubicar a un cliente la lista se achica: si la página actual queda vacía, se muestra la última.
+  const totalPaginasSinUbicar = Math.max(1, Math.ceil(sinUbicar.length / SIN_UBICAR_POR_PAGINA))
+  const paginaActual = Math.min(paginaSinUbicar, totalPaginasSinUbicar - 1)
+  const desde = paginaActual * SIN_UBICAR_POR_PAGINA
+  const sinUbicarPagina = sinUbicar.slice(desde, desde + SIN_UBICAR_POR_PAGINA)
+
+  function irAPaginaSinUbicar(nueva) {
+    setPaginaSinUbicar(nueva)
+    tituloSinUbicarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function cambiarLista(valor) {
+    setListaId(valor)
+    setPaginaSinUbicar(0)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Select value={listaId} onValueChange={setListaId}>
+        <Select value={listaId} onValueChange={cambiarLista}>
           <SelectTrigger className="w-full sm:w-80">
             <SelectValue placeholder="Elegí una lista" />
           </SelectTrigger>
@@ -122,9 +142,11 @@ export function MapaClientesTab() {
 
       {sinUbicar.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold">Clientes sin ubicar</p>
+          <p ref={tituloSinUbicarRef} className="scroll-mt-4 text-sm font-semibold">
+            Clientes sin ubicar <span className="font-normal text-muted-foreground">({sinUbicar.length})</span>
+          </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {sinUbicar.map((c) => (
+            {sinUbicarPagina.map((c) => (
               <div key={c.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-card p-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
@@ -139,6 +161,29 @@ export function MapaClientesTab() {
               </div>
             ))}
           </div>
+
+          {sinUbicar.length > SIN_UBICAR_POR_PAGINA && (
+            <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {desde + 1}–{desde + sinUbicarPagina.length} de {sinUbicar.length}
+              </p>
+              <div className="flex items-center justify-between gap-2 sm:justify-end">
+                <Button type="button" variant="outline" size="sm" disabled={paginaActual === 0}
+                  onClick={() => irAPaginaSinUbicar(paginaActual - 1)}>
+                  <ChevronLeft className="size-4" />
+                  Anterior
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Página {paginaActual + 1} de {totalPaginasSinUbicar}
+                </span>
+                <Button type="button" variant="outline" size="sm" disabled={paginaActual + 1 >= totalPaginasSinUbicar}
+                  onClick={() => irAPaginaSinUbicar(paginaActual + 1)}>
+                  Siguiente
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
