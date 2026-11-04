@@ -62,6 +62,15 @@ export async function eliminarItemLista({ listaId, itemId }) {
   await apiClient.delete(`/repartos/listas/${listaId}/items/${itemId}`)
 }
 
+/**
+ * Guarda el orden de visita de una lista. clienteIds va en el orden real de la calle.
+ * También reordena el reparto del día que esté abierto para esa lista.
+ */
+export async function reordenarLista({ listaId, clienteIds }) {
+  const { data } = await apiClient.put(`/repartos/listas/${listaId}/orden`, { cliente_ids: clienteIds })
+  return data.lista
+}
+
 // --- B. Reparto del día ---
 
 /**
