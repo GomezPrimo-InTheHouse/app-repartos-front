@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { getApiErrorMessage } from '@/api/client'
-import { actualizarItemEjecucion, completarEjecucion, fetchRepartoHoy } from '@/api/repartos'
+import { completarEjecucion, fetchRepartoHoy } from '@/api/repartos'
+import { BotonOrdenarRecorrido, OrdenarRecorrido } from '@/components/reparto/OrdenarRecorrido'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
@@ -10,13 +12,14 @@ import { Button } from '@/components/ui/button'
  * productos reales) se calcula solo desde los despachos reales del día;
  * las acciones de carga (crear despacho, marcar visitado sin despacho)
  * viven en el dialog "Reparto de hoy" accesible desde el módulo Despachos.
- * Acá solo se puede ver el estado y cerrar el reparto del día.
+ * Acá se puede ver el estado, ordenar el recorrido y cerrar el reparto del día.
  */
-function ClienteItemRow({ item }) {
+function ClienteItemRow({ item, numero }) {
   return (
     <div className={`flex flex-col gap-1.5 rounded-md border p-3 ${item.visitado ? 'border-success bg-success-soft' : 'border-border bg-card'}`}>
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-sm font-medium">
+          <span className="text-xs font-normal text-muted-foreground">{numero}.</span>{' '}
           {item.cliente_nombre}
           {item.direccion && (
             <span className="font-normal text-muted-foreground"> — {item.direccion}</span>
@@ -44,6 +47,8 @@ function ClienteItemRow({ item }) {
 
 function EjecucionCard({ ejecucion }) {
   const queryClient = useQueryClient()
+  const [ordenando, setOrdenando] = useState(false)
+  const itemsOrdenados = ejecucion.items.slice().sort((a, b) => a.orden - b.orden)
 
   const completarMutation = useMutation({
     mutationFn: () => completarEjecucion(ejecucion.id),
@@ -60,18 +65,19 @@ function EjecucionCard({ ejecucion }) {
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-display text-base font-semibold">{ejecucion.lista_nombre}</p>
           <p className="text-xs text-muted-foreground">
             {visitados} de {ejecucion.items.length} visitados
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge variant={ejecucion.estado === 'completado' ? 'success' : 'outline'}>
             {ejecucion.estado === 'completado' ? 'Completado' : 'Pendiente'}
           </Badge>
-          {ejecucion.estado !== 'completado' && (
+          {!ordenando && <BotonOrdenarRecorrido ejecucion={ejecucion} onClick={() => setOrdenando(true)} />}
+          {ejecucion.estado !== 'completado' && !ordenando && (
             <Button type="button" size="sm" onClick={() => completarMutation.mutate()} disabled={completarMutation.isPending}>
               {completarMutation.isPending ? 'Cerrando…' : 'Cerrar reparto'}
             </Button>
@@ -79,14 +85,15 @@ function EjecucionCard({ ejecucion }) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {ejecucion.items
-          .slice()
-          .sort((a, b) => a.orden - b.orden)
-          .map((item) => (
-            <ClienteItemRow key={item.id} item={item} />
+      {ordenando ? (
+        <OrdenarRecorrido ejecucion={ejecucion} itemsOrdenados={itemsOrdenados} onClose={() => setOrdenando(false)} />
+      ) : (
+        <div className="flex flex-col gap-2">
+          {itemsOrdenados.map((item, index) => (
+            <ClienteItemRow key={item.id} item={item} numero={index + 1} />
           ))}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -101,7 +108,7 @@ export function RepartoHoyTab() {
     <div className="flex flex-col gap-4">
       <p className="text-xs text-muted-foreground">
         Para registrar despachos y marcar visitas, andá al módulo de Despachos → "Reparto de hoy".
-        Acá solo se ve el seguimiento.
+        Acá se ve el seguimiento y podés ordenar el recorrido.
       </p>
 
       {isLoading && <p className="py-8 text-center text-sm text-muted-foreground">Cargando…</p>}
