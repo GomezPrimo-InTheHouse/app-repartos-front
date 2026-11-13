@@ -1,80 +1,51 @@
-// Utilidades de ubicación compartidas por el mapa, el reparto del día y el envío automático.
+import { apiClient } from './client'
 
-/** Centro por defecto del mapa cuando todavía no hay nada ubicado: Villa María, Córdoba. */
-export const CENTRO_POR_DEFECTO = [-32.4075, -63.2402]
-export const ZOOM_POR_DEFECTO = 13
-
-/** Más viejo que esto, la posición de un repartidor se muestra como desactualizada. */
-export const HORAS_UBICACION_VIGENTE = 2
-
-const MENSAJES_ERROR = {
-  1: 'No diste permiso para usar la ubicación. Habilitalo en la configuración del navegador.',
-  2: 'No se pudo obtener la ubicación. Revisá que el GPS esté prendido.',
-  3: 'La ubicación tardó demasiado. Probá de nuevo, mejor al aire libre.',
+/** Clientes activos con ubicación y saldo. Con listaId: solo los de esa lista, en orden de visita. */
+export async function fetchClientesGeo({ listaId } = {}) {
+  const { data } = await apiClient.get('/geolocalizacion/clientes', {
+    params: { lista_id: listaId || undefined },
+  })
+  return data // { listas, clientes }
 }
 
-export function geolocalizacionDisponible() {
-  return typeof navigator !== 'undefined' && 'geolocation' in navigator
+/** Guarda la ubicación de un cliente. latitud/longitud en null la quitan. origen: 'manual' | 'gps' */
+export async function guardarUbicacionCliente({ clienteId, latitud, longitud, origen }) {
+  const { data } = await apiClient.put(`/geolocalizacion/clientes/${clienteId}/ubicacion`, {
+    latitud,
+    longitud,
+    origen,
+  })
+  return data.cliente
 }
 
 /**
- * Pide la posición actual al navegador. Resuelve { latitud, longitud, precision } o rechaza con un
- * Error con mensaje en español (y `code` del navegador: 1 permiso, 2 sin señal, 3 timeout).
+ * Intenta ubicar a un cliente con la dirección que tiene cargada. El back guarda el pin solo si
+ * encuentra la altura exacta y si el cliente todavía no estaba ubicado.
+ * Devuelve { estado: 'ubicado' | 'ya_ubicado' | 'sin_direccion' | 'aproximado' | 'no_encontrado', cliente }.
  */
-export function obtenerPosicionActual({ timeout = 15000, maximumAge = 30000 } = {}) {
-  return new Promise((resolve, reject) => {
-    if (!geolocalizacionDisponible()) {
-      reject(Object.assign(new Error('Este navegador no permite obtener la ubicación.'), { code: 0 }))
-      return
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        resolve({
-          latitud: pos.coords.latitude,
-          longitud: pos.coords.longitude,
-          precision: pos.coords.accuracy,
-        }),
-      (err) => reject(Object.assign(new Error(MENSAJES_ERROR[err.code] ?? 'No se pudo obtener la ubicación.'), { code: err.code })),
-      { enableHighAccuracy: true, timeout, maximumAge }
-    )
+export async function ubicarClienteAutomatico(clienteId) {
+  const { data } = await apiClient.post(`/geolocalizacion/clientes/${clienteId}/ubicar-automatico`)
+  return data
+}
+
+/**
+ * Busca una dirección (Nominatim vía el back). Sin localidad, el back usa la más común entre los
+ * clientes de la empresa. Devuelve { localidad, resultados: [{ latitud, longitud, etiqueta, exacta }] }.
+ */
+export async function buscarDireccion({ direccion, localidad }) {
+  const { data } = await apiClient.get('/geolocalizacion/buscar-direccion', {
+    params: { direccion, localidad: localidad || undefined },
   })
+  return data
 }
 
-/** Link para abrir el recorrido hasta un punto en Google Maps (app o web). */
-export function linkComoLlegar(latitud, longitud) {
-  return `https://www.google.com/maps/dir/?api=1&destination=${latitud},${longitud}`
+/** Envía la posición actual del usuario logueado (se guarda solo la última). */
+export async function enviarMiUbicacion({ latitud, longitud, precision }) {
+  await apiClient.post('/geolocalizacion/mi-ubicacion', { latitud, longitud, precision })
 }
 
-/** "hace 5 min", "hace 2 h", "hace 3 días". */
-export function haceCuanto(fecha) {
-  if (!fecha) return 'nunca'
-  const minutos = Math.max(0, Math.round((Date.now() - new Date(fecha).getTime()) / 60000))
-  if (minutos < 1) return 'recién'
-  if (minutos < 60) return `hace ${minutos} min`
-  const horas = Math.round(minutos / 60)
-  if (horas < 24) return `hace ${horas} h`
-  const dias = Math.round(horas / 24)
-  return `hace ${dias} día${dias === 1 ? '' : 's'}`
-}
-
-export function ubicacionVigente(fecha) {
-  if (!fecha) return false
-  return Date.now() - new Date(fecha).getTime() < HORAS_UBICACION_VIGENTE * 3600 * 1000
-}
-
-// localStorage puede no estar disponible (modo privado, bloqueado): nunca rompe la app.
-export function leerLocal(clave) {
-  try {
-    return window.localStorage.getItem(clave)
-  } catch {
-    return null
-  }
-}
-
-export function escribirLocal(clave, valor) {
-  try {
-    window.localStorage.setItem(clave, valor)
-  } catch {
-    // sin almacenamiento: se vuelve a preguntar la próxima vez
-  }
+/** Empleados activos con su última ubicación conocida (solo admin). */
+export async function fetchRepartidoresGeo() {
+  const { data } = await apiClient.get('/geolocalizacion/repartidores')
+  return data.repartidores
 }
