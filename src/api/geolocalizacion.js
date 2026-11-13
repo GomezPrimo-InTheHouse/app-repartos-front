@@ -19,6 +19,16 @@ export async function guardarUbicacionCliente({ clienteId, latitud, longitud, or
 }
 
 /**
+ * Intenta ubicar a un cliente con la dirección que tiene cargada. El back guarda el pin solo si
+ * encuentra la altura exacta y si el cliente todavía no estaba ubicado.
+ * Devuelve { estado: 'ubicado' | 'ya_ubicado' | 'sin_direccion' | 'aproximado' | 'no_encontrado', cliente }.
+ */
+export async function ubicarClienteAutomatico(clienteId) {
+  const { data } = await apiClient.post(`/geolocalizacion/clientes/${clienteId}/ubicar-automatico`)
+  return data
+}
+
+/**
  * Busca una dirección (Nominatim vía el back). Sin localidad, el back usa la más común entre los
  * clientes de la empresa. Devuelve { localidad, resultados: [{ latitud, longitud, etiqueta, exacta }] }.
  */
