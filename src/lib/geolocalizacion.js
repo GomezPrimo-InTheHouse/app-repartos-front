@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { apiClient } from '../api/client.js'
 
 /** Clientes activos con ubicación y saldo. Con listaId: solo los de esa lista, en orden de visita. */
 export async function fetchClientesGeo({ listaId } = {}) {
