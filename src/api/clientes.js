@@ -97,6 +97,12 @@ export async function confirmarImportacionExcel(candidatos) {
   return data
 }
 
+/** Guarda el teléfono de un cliente (desde el aviso por WhatsApp del reparto). */
+export async function actualizarTelefonoCliente({ clienteId, telefono }) {
+  const { data } = await apiClient.put(`/clientes/${clienteId}/telefono`, { telefono })
+  return data.cliente
+}
+
 // --- Envases retornables ---
 
 export async function fetchEnvasesCliente(clienteId) {

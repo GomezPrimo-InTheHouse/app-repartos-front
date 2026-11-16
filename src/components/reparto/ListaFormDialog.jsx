@@ -1,6 +1,9 @@
+
+
 // import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 // import { Trash2 } from 'lucide-react'
 // import { useState } from 'react'
+// import { useNavigate } from 'react-router-dom'
 // import { toast } from 'sonner'
 // import { fetchClientes } from '@/api/clientes'
 // import { getApiErrorMessage } from '@/api/client'
@@ -17,7 +20,9 @@
 // import {
 //   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 // } from '@/components/ui/select'
+// import { useAuth } from '@/hooks/useAuth'
 // import { moverElemento } from '@/lib/orden'
+// import { avisarResultadoUbicacion, ubicarEnLote } from '@/lib/ubicacionAutomatica'
 // import { cn } from '@/lib/utils'
 
 // // Orden de la semana: los días seleccionados se envían siempre en este orden.
@@ -71,6 +76,24 @@
 //   const [form, setForm] = useState(() => formDesdeLista(lista))
 //   const [clienteParaAgregar, setClienteParaAgregar] = useState('')
 //   const queryClient = useQueryClient()
+//   const navigate = useNavigate()
+//   const { tieneModuloEmpresa, tienePermiso } = useAuth()
+
+//   // Después de guardar: busca la dirección de los clientes que se sumaron y pone el pin en el mapa.
+//   // Corre en segundo plano (el diálogo ya se cerró); los que no se encuentren se avisan con sus nombres.
+//   async function ubicarClientesNuevos(clientesNuevos) {
+//     const total = clientesNuevos.length
+//     const idAviso = toast.loading(`Ubicando clientes nuevos en el mapa… 0 de ${total}`)
+//     const resumen = await ubicarEnLote(clientesNuevos, {
+//       onProgreso: (hechos) => toast.loading(`Ubicando clientes nuevos en el mapa… ${hechos} de ${total}`, { id: idAviso }),
+//     })
+//     toast.dismiss(idAviso)
+//     queryClient.invalidateQueries({ queryKey: ['geolocalizacion'] })
+//     queryClient.invalidateQueries({ queryKey: ['repartos', 'hoy'] })
+//     avisarResultadoUbicacion(resumen, {
+//       irAlMapa: tienePermiso('geolocalizacion') ? () => navigate('/geolocalizacion') : undefined,
+//     })
+//   }
 
 //   const { data: clientes } = useQuery({
 //     queryKey: ['clientes', { activo: true, paraSelector: true }],
@@ -182,6 +205,15 @@
 //       queryClient.invalidateQueries({ queryKey: ['repartos', 'hoy'] })
 //       // El Mapa numera a los clientes según el orden de la lista
 //       queryClient.invalidateQueries({ queryKey: ['geolocalizacion', 'clientes'] })
+
+//       // Clientes que se sumaron en este guardado (en una lista nueva, todos)
+//       const clientesNuevos = form.clientesSeleccionados
+//         .filter((c) => !c.itemId)
+//         .map((c) => ({ id: c.clienteId, nombre: c.clienteNombre }))
+//       if (tieneModuloEmpresa('geolocalizacion') && clientesNuevos.length > 0) {
+//         ubicarClientesNuevos(clientesNuevos)
+//       }
+
 //       setOpen(false)
 //     },
 //     onError: (error) => {
@@ -354,7 +386,7 @@
 // }
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2 } from 'lucide-react'
+import { MessageCircle, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -363,6 +395,7 @@ import { getApiErrorMessage } from '@/api/client'
 import {
   actualizarLista, agregarItemLista, crearLista, eliminarItemLista, reordenarLista,
 } from '@/api/repartos'
+import { AvisoWhatsAppDialog } from '@/components/reparto/AvisoWhatsAppDialog'
 import { ControlPosicion } from '@/components/reparto/ControlPosicion'
 import { Button } from '@/components/ui/button'
 import {
@@ -376,6 +409,7 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { moverElemento } from '@/lib/orden'
 import { avisarResultadoUbicacion, ubicarEnLote } from '@/lib/ubicacionAutomatica'
+import { diaSugerido } from '@/lib/whatsapp'
 import { cn } from '@/lib/utils'
 
 // Orden de la semana: los días seleccionados se envían siempre en este orden.
@@ -428,6 +462,8 @@ export function ListaFormDialog({ lista, trigger, open: openControlado, onOpenCh
 
   const [form, setForm] = useState(() => formDesdeLista(lista))
   const [clienteParaAgregar, setClienteParaAgregar] = useState('')
+  // Cliente al que se le está armando el aviso por WhatsApp (null = diálogo cerrado)
+  const [clienteAviso, setClienteAviso] = useState(null)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { tieneModuloEmpresa, tienePermiso } = useAuth()
@@ -502,6 +538,12 @@ export function ListaFormDialog({ lista, trigger, open: openControlado, onOpenCh
       ...prev,
       clientesSeleccionados: prev.clientesSeleccionados.filter((c) => c.clienteId !== clienteId),
     }))
+  }
+
+  // El teléfono sale del listado de clientes (los ítems de la lista no lo traen)
+  function abrirAviso(cliente) {
+    const datos = clientes?.find((c) => c.id === cliente.clienteId)
+    setClienteAviso({ id: cliente.clienteId, nombre: cliente.clienteNombre, telefono: datos?.telefono ?? '' })
   }
 
   function handleMoverCliente(desde, hasta) {
@@ -697,27 +739,43 @@ export function ListaFormDialog({ lista, trigger, open: openControlado, onOpenCh
                 {form.clientesSeleccionados.map((cliente, index) => (
                   <li
                     key={cliente.clienteId}
-                    className="flex items-center justify-between gap-2 rounded-md bg-muted px-3 py-2 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted px-3 py-2 text-sm"
                   >
-                    <span className="min-w-0 flex-1 truncate">
+                    <span className="min-w-0 flex-1 basis-32 truncate">
                       <span className="text-xs text-muted-foreground">{index + 1}.</span>{' '}
                       {cliente.clienteNombre}
                     </span>
-                    <ControlPosicion
-                      index={index}
-                      total={form.clientesSeleccionados.length}
-                      nombre={cliente.clienteNombre}
-                      onMover={(hasta) => handleMoverCliente(index, hasta)}
-                      disabled={mutation.isPending}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleQuitarCliente(cliente.clienteId)}
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                      aria-label={`Quitar ${cliente.clienteNombre}`}
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-success hover:text-success"
+                        onClick={() => abrirAviso(cliente)}
+                        aria-label={`Avisar por WhatsApp a ${cliente.clienteNombre}`}
+                        title="Avisar por WhatsApp"
+                      >
+                        <MessageCircle className="size-4" />
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuitarCliente(cliente.clienteId)}
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        aria-label={`Quitar ${cliente.clienteNombre}`}
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                    {/* En el celular baja a una segunda línea, a la derecha */}
+                    <div className="flex w-full justify-end sm:w-auto">
+                      <ControlPosicion
+                        index={index}
+                        total={form.clientesSeleccionados.length}
+                        nombre={cliente.clienteNombre}
+                        onMover={(hasta) => handleMoverCliente(index, hasta)}
+                        disabled={mutation.isPending}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -733,6 +791,13 @@ export function ListaFormDialog({ lista, trigger, open: openControlado, onOpenCh
             </Button>
           </DialogFooter>
         </form>
+
+        <AvisoWhatsAppDialog
+          cliente={clienteAviso}
+          diaInicial={diaSugerido(form)}
+          open={Boolean(clienteAviso)}
+          onOpenChange={(abierto) => { if (!abierto) setClienteAviso(null) }}
+        />
       </DialogContent>
     </Dialog>
   )
